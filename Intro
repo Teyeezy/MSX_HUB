@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Updated: Collects 2 fuels and targets specifically the 2nd furthest Power Box sorted by Generator distance.
+-- Updated: Target specifically the 2nd furthest Power Box sorted by Generator distance.
 
 print("Loading")
-print("[ UPDATE ] Configured to collect 2 fuels and target the 2nd furthest Power Box")
+print("[ UPDATE ] Configured to target the 2nd furthest Power Box based on Generator distance")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -81,7 +81,7 @@ local function getGeneratorPosition()
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
  
--- Find Fuel
+-- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
     local foundValidFuel = nil
@@ -133,7 +133,7 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- SMART TRAVEL COMPONENT
+-- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
 local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
     
@@ -148,14 +148,14 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
     raycastParams.FilterDescendantsInstances = {character}
     
     local heartbeatEvent = RunService.Heartbeat
-
+ 
     while true do
         if not humanoidRootPart or not humanoidRootPart.Parent then break end
         local deltaTime = heartbeatEvent:Wait()
         local currentPos = humanoidRootPart.Position
         local remainingVector = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z) - currentPos
         local totalDistance = remainingVector.Magnitude
-
+ 
         if totalDistance <= 2.0 then
             humanoidRootPart.CFrame = CFrame.new(finalTarget)
             humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0)
@@ -165,7 +165,7 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
             humanoidRootPart.Anchored = false
             break
         end
-
+ 
         local direction = remainingVector.Unit
         
         local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
@@ -180,12 +180,12 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
                 direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
             end
         end
-
+ 
         local currentAllowedSpeed = NORMAL_SPEED
         if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
             currentAllowedSpeed = SLOW_SPEED
         end
-
+ 
         local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
         humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
@@ -202,9 +202,9 @@ local function runPipeline()
  
     local genPos = getGeneratorPosition()
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 2 ชิ้น
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
     local collectedCount = 0
-    while collectedCount < 2 do
+    while collectedCount < 7 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
             collectedCount = collectedCount + 1
@@ -226,7 +226,7 @@ local function runPipeline()
  
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
 
-    -- STEP 2: Scan and Target the 2nd Furthest Power Box
+    -- STEP 2: Scan and Target the 2nd Furthest Power Box (ไกลเป็นลำดับที่ 2 จาก Generator)
     local powerBoxData = {}
     local boxOpenedSuccessfully = false
  
@@ -247,10 +247,12 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
+        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
+        -- เลือก Power Box ตัวที่ไกลเป็นลำดับที่ 2 (ถ้ามีหลายตัว ให้เอาตัวรองสุดท้าย หรือตัวที่ 2 ถ้านับจากตัวไกลสุด)
         local targetIndex = #powerBoxData >= 2 and 2 or 1
         local chosenBoxData = powerBoxData[targetIndex]
         local chosenBox = chosenBoxData.Instance
