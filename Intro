@@ -205,4 +205,96 @@ local function runPipeline()
     -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 2 ชิ้น
     local collectedCount = 0
     while collectedCount < 2 do
-        local fuel = getBestFuelPosition(genPos, humanoidRoot
+        local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
+        if fuel then
+            collectedCount = collectedCount + 1
+            print("[Step] Moving to fuel #" .. collectedCount)
+            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
+            task.wait(0.3)
+            FuelTeleport(humanoidRootPart, fuel)
+            excludeFuel[fuel] = true
+
+            local pos = humanoidRootPart.Position
+            humanoidRootPart.CFrame = CFrame.new(pos.X, genPos.Y + 1, pos.Z)
+
+            task.wait(0.5)
+        else
+            print("[Pipeline] No more fuels found on map. Proceeding with " .. collectedCount .. " fuels...")
+            break
+        end
+    end
+ 
+    print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
+
+    -- STEP 2: Scan and Target the 2nd Furthest Power Box
+    local powerBoxData = {}
+    local boxOpenedSuccessfully = false
+ 
+    if MapFolder and MapFolder:FindFirstChild("Tiles") then
+        local tiles = MapFolder.Tiles:GetChildren()
+        for i = 1, #tiles do
+            local child = tiles[i]
+            if child.Name == "Power Plant" then
+                local powerBox = child:FindFirstChild("Power Box")
+                if powerBox and powerBox:IsA("Model") then
+                    table.insert(powerBoxData, {
+                        Instance = powerBox,
+                        Position = powerBox:GetPivot().Position
+                    })
+                end
+            end
+        end
+    end
+ 
+    if #powerBoxData > 0 then
+        table.sort(powerBoxData, function(a, b)
+            return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
+        end)
+ 
+        local targetIndex = #powerBoxData >= 2 and 2 or 1
+        local chosenBoxData = powerBoxData[targetIndex]
+        local chosenBox = chosenBoxData.Instance
+        local finalBoxTarget = chosenBoxData.Position
+ 
+        print("[Step] Targeting the 2nd furthest Power Box from Generator.")
+        smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
+        task.wait(0.5)
+ 
+        if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
+            local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if prompt then
+                for i = 1, 3 do
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    else
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration + 0.05)
+                        prompt:InputHoldEnd()
+                    end
+                    task.wait(0.1)
+                end
+                print("[Pipeline] 2nd furthest Power Box interaction forced!")
+                boxOpenedSuccessfully = true
+            end
+        end
+
+        local boxPos = finalBoxTarget
+        humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
+        task.wait(0.5)
+    end
+ 
+    -- --- VOTE PLAY AGAIN SEQUENCE ---
+    task.wait(1.0) 
+    if boxOpenedSuccessfully then
+        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+            pcall(function()
+                PlayAgainRemote:FireServer()
+            end)
+            print("[Play Again] Task completed successfully. Resetting game.")
+        end
+    else
+        print("[Warning] Could not open the target power box. Skipping reset.")
+    end
+end
+ 
+runPipeline()
