@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Modified to loop 8 fuels, open 2 Power Boxes sequentially, drop to ground, and reset only at the end
+-- Modified to use Generator as the main distance reference point, loop 8 fuels, and open 2 Power Boxes sequentially
 
 print("Loading")
-print("[ UPDATE ] Changed the movement function so it's burst speed so it should be faster than original one")
+print("[ UPDATE ] Changed reference center to Generator for accurate distance sorting")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -75,34 +75,7 @@ local function StartPermanentNoclip()
 end
 StartPermanentNoclip()
  
--- Find Fuel
-local excludeFuel = {}
-local function getClosestFuelPosition(currentPos)
-    local foundValidFuel = nil
-    while not foundValidFuel do
-        local bestTarget = nil
-        local shortestDistance = math.huge
-        if DroppedItemsFolder then
-            for _, item in ipairs(DroppedItemsFolder:GetChildren()) do
-                if item.Name == "Fuel" and not excludeFuel[item] then
-                    local dist = (currentPos - item:GetPivot().Position).Magnitude
-                    if dist < shortestDistance then
-                        shortestDistance = dist
-                        bestTarget = item
-                    end
-                end
-            end
-        end
-        if not bestTarget then break end
-        if (bestTarget:GetPivot().Position.Y - currentPos.Y) <= 2 then
-            foundValidFuel = bestTarget
-        else
-            excludeFuel[bestTarget] = true
-        end
-    end
-    return foundValidFuel
-end
- 
+-- Get Generator Position (ใช้เป็นจุดศูนย์กลางอ้างอิงหลัก)
 local function getGeneratorPosition()
     if cachedGeneratorLocation then return cachedGeneratorLocation end
     if MapFolder and MapFolder.Tiles then
@@ -118,7 +91,37 @@ local function getGeneratorPosition()
         cachedGeneratorLocation = fallbackGen:GetPivot().Position
         return cachedGeneratorLocation
     end
-    return nil
+    -- Fallback เผื่อหาไม่เจอจริงๆ ให้ใช้ตำแหน่งผู้เล่นตอนนั้น
+    return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
+end
+ 
+-- Find Fuel (เรียงลำดับความใกล้จาก Generator)
+local excludeFuel = {}
+local function getClosestFuelPositionFromGen(genPos)
+    local foundValidFuel = nil
+    while not foundValidFuel do
+        local bestTarget = nil
+        local shortestDistance = math.huge
+        if DroppedItemsFolder then
+            for _, item in ipairs(DroppedItemsFolder:GetChildren()) do
+                if item.Name == "Fuel" and not excludeFuel[item] then
+                    local fuelPos = item:GetPivot().Position
+                    local dist = (genPos - fuelPos).Magnitude
+                    if dist < shortestDistance then
+                        shortestDistance = dist
+                        bestTarget = item
+                    end
+                end
+            end
+        end
+        if not bestTarget then break end
+        if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 15 then
+            foundValidFuel = bestTarget
+        else
+            excludeFuel[bestTarget] = true
+        end
+    end
+    return foundValidFuel
 end
  
 local function FuelTeleport(hrp, targetFuel)
@@ -190,10 +193,12 @@ local function runPipeline()
     print("[Pipeline] Initiating Complete Sequence...")
     task.wait(0.3)
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (หรือหมดแมป)
+    local genPos = getGeneratorPosition()
+ 
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (โดยอ้างอิงระยะจาก Generator)
     local collectedCount = 0
     while collectedCount < 8 do
-        local fuel = getClosestFuelPosition(humanoidRootPart.Position)
+        local fuel = getClosestFuelPositionFromGen(genPos)
         if fuel then
             collectedCount = collectedCount + 1
             print("[Step] Moving to fuel #" .. collectedCount)
@@ -210,7 +215,7 @@ local function runPipeline()
  
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Moving to Power Boxes...")
 
-    -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially
+    -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially (อ้างอิงระยะจาก Generator เช่นกัน)
     print("[Step] Scanning for Power Box models...")
     local powerBoxData = {}
     local anyBoxOpened = false
@@ -230,9 +235,9 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
-        local currentPos = humanoidRootPart.Position
+        -- จัดเรียงลำดับ Power Box จากระยะที่ใกล้ "Generator" มากที่สุด ไปหาไกลสุด
         table.sort(powerBoxData, function(a, b)
-            return (currentPos - a.Position).Magnitude < (currentPos - b.Position).Magnitude
+            return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
         -- วนลูปเปิด Power Box ให้ครบ 2 อันตามลำดับ
@@ -270,14 +275,14 @@ local function runPipeline()
         end
     end
  
-    -- --- VOTE PLAY AGAIN SEQUENCE (รีเซ็ตเกมเมื่อทำครบทุกขั้นตอนจริง ๆ เท่านั้น) ---
+    -- --- VOTE PLAY AGAIN SEQUENCE ---
     task.wait(1.0) 
     if anyBoxOpened then
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
             pcall(function()
                 PlayAgainRemote:FireServer()
             end)
-            print("[Play Again] All steps (8 fuels + 2 power boxes) completed. Sequence executed successfully.")
+            print("[Play Again] All steps completed. Sequence executed successfully.")
         end
     end
 end
