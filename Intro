@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Fixed Power Box drop bug by resetting to safe ground height instead of arbitrary subtraction.
+-- Updated: 7 fuels, smart obstacle-avoidance routing, constant speed 30 with slow-down on walls, generator reference, 2 sequential power boxes, safe final reset.
 
 print("Loading")
-print("[ UPDATE ] Fixed Power Box ground drop height bug to prevent glitches")
+print("[ UPDATE ] Configured for 7 fuels and smart obstacle-avoidance pathfinding")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -126,13 +126,13 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- TRAVEL COMPONENT (ล็อกความเร็วที่ 30 ชนกำแพงลดเหลือ 7)
-local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
+-- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวางน้อยที่สุด + ล็อกความเร็ว 30 และลดความเร็วเมื่อชนกำแพง)
+local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
     
     local NORMAL_SPEED = 30
     local SLOW_SPEED = 7
-    local CLEARANCE_COOLDOWN = 0.5
+    local CLEARANCE_COOLDOWN = 0.4
     local lastWallDetectedTime = 0
     
     local lockedYHeight = humanoidRootPart.Position.Y
@@ -161,9 +161,19 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
  
         local direction = remainingVector.Unit
         
-        local rayResult = workspace:Raycast(currentPos, direction * 5, raycastParams)
-        if rayResult and rayResult.Instance and rayResult.Instance.CanCollide then
+        -- ระบบตรวจจับสิ่งกีดขวางอัจฉริยะ (ยิงเช็กด้านหน้าและเฉียงซ้าย/ขวาเพื่อหาองศาที่ผ่านสิ่งกีดขวางน้อยที่สุด)
+        local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
+        local leftRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(-30), 0) * direction) * 5, raycastParams)
+        local rightRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(30), 0) * direction) * 5, raycastParams)
+        
+        if primaryRay and primaryRay.Instance and primaryRay.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
+            -- ปรับทิศทางหลบสิ่งกีดขวางอัตโนมัติหากด้านหน้าติดกำแพง
+            if leftRay and not (leftRay.Instance and leftRay.Instance.CanCollide) then
+                direction = (CFrame.Angles(0, math.rad(-45), 0) * direction).Unit
+            elseif rightRay and not (rightRay.Instance and rightRay.Instance.CanCollide) then
+                direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
+            end
         end
  
         local currentAllowedSpeed = NORMAL_SPEED
@@ -187,19 +197,19 @@ local function runPipeline()
  
     local genPos = getGeneratorPosition()
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (หรือจนกว่าจะหมดแมป)
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น (หรือจนกว่าจะหมดแมป)
     local collectedCount = 0
-    while collectedCount < 8 do
+    while collectedCount < 7 do
         local fuel = getClosestFuelPositionFromGen(genPos)
         if fuel then
             collectedCount = collectedCount + 1
             print("[Step] Moving to fuel #" .. collectedCount)
-            adaptiveCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
+            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
             task.wait(0.3)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
 
-            -- ดึงตัวละครลงพื้นหลังเก็บ Fuel แต่ละชิ้น (ใช้ระดับความสูง Y ของ Generator เป็นฐานปลอดภัย)
+            -- ดึงตัวละครลงพื้นหลังเก็บ Fuel แต่ละชิ้น (ใช้ระดับความสูงปลอดภัยจาก Generator)
             local pos = humanoidRootPart.Position
             humanoidRootPart.CFrame = CFrame.new(pos.X, genPos.Y + 1, pos.Z)
 
@@ -244,7 +254,7 @@ local function runPipeline()
             local finalBoxTarget = powerBoxData[boxIndex].Position
  
             print("[Step] Moving to Power Box #" .. boxIndex)
-            adaptiveCrawlTo(finalBoxTarget, humanoidRootPart, character)
+            smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
             task.wait(0.5)
  
             if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
@@ -265,7 +275,7 @@ local function runPipeline()
                 end
             end
 
-            -- [จุดที่แก้]: หลังเปิดกล่องเสร็จ ดึงตัวละครลงมาที่ระดับความสูงปลอดภัย (อ้างอิงความสูงจาก Generator) ไม่ให้ลอยค้าง
+            -- ดึงตัวละครลงพื้นหลังเปิดกล่องเสร็จ (อ้างอิงความสูงจาก Generator)
             local boxPos = finalBoxTarget
             humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
             
