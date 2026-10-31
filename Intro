@@ -1,6 +1,7 @@
--- === STANDALONE BLACK SCREEN & STATS GUI (Perfect Match) ===
+-- === STANDALONE BLACK SCREEN & STATS GUI (Fixed 999 Bug) ===
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -33,12 +34,12 @@ TextLabel.TextYAlignment = Enum.TextYAlignment.Center
 TextLabel.Text = "🤖 กำลังเปิดหน้าจอสีดำ..."
 TextLabel.Parent = ScreenGui
 
--- ตัวแปรสถานะหลัก (สคริปต์อื่นสามารถเปลี่ยนข้อความผ่าน _G.BotStatus ได้)
+-- ตัวแปรสถานะหลัก
 if not _G.BotStatus then
     _G.BotStatus = "ระบบ GUI พร้อมใช้งาน"
 end
 
--- 4. ระบบอัปเดตหน้าจอแบบเรียลไทม์ (จับเวลา + ดึงค่า Emeralds จาก UI ของเกมโดยตรง)
+-- 4. ระบบอัปเดตหน้าจอแบบเรียลไทม์ (ดึงค่า Emeralds ตัวจริง หลบเลข 999)
 local startTime = os.clock()
 task.spawn(function()
     while true do
@@ -48,26 +49,28 @@ task.spawn(function()
         local seconds = elapsedSeconds % 60
         local timeString = string.format("%02d:%02d", minutes, seconds)
         
-        -- ดึงค่า Emeralds จาก TextLabel ที่เกมใช้แสดงผลอยู่จริง
+        -- ดึงค่า Emeralds จาก UI ของเกมโดยกรองค่าที่ไม่ใช่ 999
         local emeralds = "0"
         pcall(function()
-            -- อิงตามโครงสร้างใน PlayerGui ของเกมนี้
+            -- เช็คจากโครงสร้าง Main -> BloodGemDisplay -> Count (หรือชื่อสกุลเงินจริง)
             local main = PlayerGui:FindFirstChild("Main")
             if main then
-                local display = main:FindFirstChild("BloodGemDisplay") -- หรือโฟลเดอร์แสดงผล Emeralds
+                local display = main:FindFirstChild("BloodGemDisplay") or main:FindFirstChild("EmeraldsDisplay") or main:FindFirstChild("Currency")
                 if display then
-                    local count = display:FindFirstChild("Count")
+                    local count = display:FindFirstChild("Count") or display:FindFirstChild("TextLabel")
                     if count and count:IsA("TextLabel") then
-                        emeralds = count.Text
+                        if count.Text ~= "999" then
+                            emeralds = count.Text
+                        end
                     end
                 end
             end
             
-            -- ถ้ายังไม่เจอ ให้ลองสแกนหา TextLabel ที่มีชื่อหรือข้อความใกล้เคียง
+            -- ถ้ายัังไม่ได้ ให้หา TextLabel ที่ไม่ใช่เลข 999
             if emeralds == "0" then
                 for _, desc in ipairs(PlayerGui:GetDescendants()) do
-                    if desc:IsA("TextLabel") and (desc.Name == "Count" or desc.Name:lower():find("emerald") or desc.Name:lower():find("gem")) then
-                        if desc.Text ~= "" and desc.Text ~= "0" then
+                    if desc:IsA("TextLabel") and (desc.Name == "Count" or desc.Name:lower():find("gem") or desc.Name:lower():find("emerald")) then
+                        if desc.Text ~= "" and desc.Text ~= "999" and desc.Text ~= "0" then
                             emeralds = desc.Text
                             break
                         end
