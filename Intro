@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Locked speed at 30, drops speed on wall collision, Generator reference, 8 fuels, 2 sequential power boxes, safe final reset.
+-- Added drop-to-ground logic after each individual fuel collection to prevent floating/dashing.
 
 print("Loading")
-print("[ UPDATE ] Speed locked to 30, with automatic wall-collision slow down")
+print("[ UPDATE ] Added ground stabilization after every single fuel collection")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -126,7 +126,7 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- TRAVEL COMPONENT (ล็อกความเร็วที่ 30 เป็นหลัก แต่จะลดเหลือ 7 ชั่วคราวเฉพาะตอนชนกำแพง/สิ่งกีดขวาง)
+-- TRAVEL COMPONENT (ล็อกความเร็วที่ 30 ชนกำแพงลดเหลือ 7)
 local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
     
@@ -161,7 +161,6 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
  
         local direction = remainingVector.Unit
         
-        -- เช็กสิ่งกีดขวางด้านหน้า
         local rayResult = workspace:Raycast(currentPos, direction * 5, raycastParams)
         if rayResult and rayResult.Instance and rayResult.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
@@ -169,7 +168,7 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
  
         local currentAllowedSpeed = NORMAL_SPEED
         if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
-            currentAllowedSpeed = SLOW_SPEED -- ลดความเร็วเฉพาะตอนชนสิ่งกีดขวาง
+            currentAllowedSpeed = SLOW_SPEED
         end
  
         local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
@@ -199,6 +198,11 @@ local function runPipeline()
             task.wait(0.3)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
+
+            -- [จุดที่เพิ่ม]: ดึงตัวละครลงพื้นทันทีหลังเก็บ Fuel แต่ละชิ้นเสร็จ
+            local pos = humanoidRootPart.Position
+            humanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+
             task.wait(0.5)
         else
             print("[Pipeline] No more fuels found on map. Proceeding with " .. collectedCount .. " fuels...")
