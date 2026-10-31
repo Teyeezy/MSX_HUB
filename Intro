@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Fixed: Removed premature reset timers, locked speed to 30, loops up to 8 fuels, and resets ONLY after 2 power boxes are done.
+-- Final Stable Version: Constant speed 30, up to 8 fuels, 2 sequential power boxes, safe final reset.
 
 print("Loading")
-print("[ UPDATE ] Fixed early resetting bug and locked speed to 30")
+print("[ UPDATE ] Script initialized with constant speed 30 and safe completion checks")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -165,7 +165,7 @@ local function runPipeline()
  
     local genPos = getGeneratorPosition()
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (หรือถ้าหมดแมปจริงๆ ถึงจะยอมข้ามไปขั้นต่อไป)
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (หรือจนกว่าจะหมดแมป)
     local collectedCount = 0
     while collectedCount < 8 do
         local fuel = getClosestFuelPositionFromGen(genPos)
@@ -209,7 +209,7 @@ local function runPipeline()
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
-        -- วนลูปเปิด Power Box ให้ครบ 2 อันตามลำดับแบบเป๊ะๆ
+        -- วนลูปเปิด Power Box ให้ครบ 2 อันตามลำดับ
         for boxIndex = 1, math.min(2, #powerBoxData) do
             local chosenBox = powerBoxData[boxIndex].Instance
             local finalBoxTarget = powerBoxData[boxIndex].Position
@@ -244,7 +244,7 @@ local function runPipeline()
         end
     end
  
-    -- --- VOTE PLAY AGAIN SEQUENCE (สั่งรีเซ็ตต่อเมื่อเปิด Power Box ครบ 2 อันจริง ๆ เท่านั้น) ---
+    -- --- VOTE PLAY AGAIN SEQUENCE (รีเซ็ตเกมเมื่อเปิด Power Box ครบ 2 อันจริง ๆ เท่านั้น) ---
     task.wait(1.0) 
     if openedBoxesCount >= 2 then
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
