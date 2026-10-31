@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Modified to use Generator as the main distance reference point, loop 8 fuels, and open 2 Power Boxes sequentially
+-- Modified to use a constant speed of 30, 8 fuels, and 2 sequential power boxes
 
 print("Loading")
-print("[ UPDATE ] Changed reference center to Generator for accurate distance sorting")
+print("[ UPDATE ] Speed locked to constant 30")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -75,7 +75,7 @@ local function StartPermanentNoclip()
 end
 StartPermanentNoclip()
  
--- Get Generator Position (ใช้เป็นจุดศูนย์กลางอ้างอิงหลัก)
+-- Get Generator Position
 local function getGeneratorPosition()
     if cachedGeneratorLocation then return cachedGeneratorLocation end
     if MapFolder and MapFolder.Tiles then
@@ -91,11 +91,10 @@ local function getGeneratorPosition()
         cachedGeneratorLocation = fallbackGen:GetPivot().Position
         return cachedGeneratorLocation
     end
-    -- Fallback เผื่อหาไม่เจอจริงๆ ให้ใช้ตำแหน่งผู้เล่นตอนนั้น
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
  
--- Find Fuel (เรียงลำดับความใกล้จาก Generator)
+-- Find Fuel (อ้างอิงจาก Generator)
 local excludeFuel = {}
 local function getClosestFuelPositionFromGen(genPos)
     local foundValidFuel = nil
@@ -138,16 +137,11 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- TRAVEL COMPONENT
+-- TRAVEL COMPONENT (ล็อกความเร็วคงที่ที่ 30 ตลอดทาง)
 local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    local BURST_SPEED, SLOW_SPEED = 75, 7
-    local CLEARANCE_COOLDOWN, SLOW_ZONE_DURATION = 0.5, 0.35
-    local lastWallDetectedTime = 0
+    local CONSTANT_SPEED = 30 -- ล็อกความเร็วไว้ที่ 30
     local lockedYHeight = humanoidRootPart.Position.Y
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {character}
     local heartbeatEvent = RunService.Heartbeat
  
     while true do
@@ -168,18 +162,7 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
         end
  
         local direction = remainingVector.Unit
-        if workspace:Raycast(currentPos, direction * 5, raycastParams) then
-            lastWallDetectedTime = os.clock()
-        end
- 
-        local currentAllowedSpeed = SLOW_SPEED
-        if os.clock() - lastWallDetectedTime >= CLEARANCE_COOLDOWN then
-            if (workspace:GetServerTimeNow() % 1.0) < (1.0 - SLOW_ZONE_DURATION) then
-                currentAllowedSpeed = BURST_SPEED
-            end
-        end
- 
-        local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
+        local frameTravelDistance = math.min(CONSTANT_SPEED * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
         humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
     end
@@ -195,7 +178,7 @@ local function runPipeline()
  
     local genPos = getGeneratorPosition()
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (โดยอ้างอิงระยะจาก Generator)
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น
     local collectedCount = 0
     while collectedCount < 8 do
         local fuel = getClosestFuelPositionFromGen(genPos)
@@ -215,7 +198,7 @@ local function runPipeline()
  
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Moving to Power Boxes...")
 
-    -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially (อ้างอิงระยะจาก Generator เช่นกัน)
+    -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially
     print("[Step] Scanning for Power Box models...")
     local powerBoxData = {}
     local anyBoxOpened = false
@@ -235,7 +218,6 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
-        -- จัดเรียงลำดับ Power Box จากระยะที่ใกล้ "Generator" มากที่สุด ไปหาไกลสุด
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
@@ -248,65 +230,3 @@ local function runPipeline()
             print("[Step] Moving to Power Box #" .. boxIndex)
             adaptiveCrawlTo(finalBoxTarget, humanoidRootPart, character)
             task.wait(0.5)
- 
-            if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
-                local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if prompt then
-                    for i = 1, 3 do
-                        if fireproximityprompt then
-                            fireproximityprompt(prompt)
-                        else
-                            prompt:InputHoldBegin()
-                            task.wait(prompt.HoldDuration + 0.05)
-                            prompt:InputHoldEnd()
-                        end
-                        task.wait(0.1)
-                    end
-                    print("[Pipeline] Power Box #" .. boxIndex .. " interaction forced!")
-                    anyBoxOpened = true
-                end
-            end
-
-            -- ดึงตัวละครลงมาติดพื้นหลังจากเปิดกล่อง เพื่อไม่ให้ลอยค้างตอนวิ่งไปกล่องที่ 2
-            local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
-            
-            task.wait(0.5)
-        end
-    end
- 
-    -- --- VOTE PLAY AGAIN SEQUENCE ---
-    task.wait(1.0) 
-    if anyBoxOpened then
-        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
-            pcall(function()
-                PlayAgainRemote:FireServer()
-            end)
-            print("[Play Again] All steps completed. Sequence executed successfully.")
-        end
-    end
-end
- 
--- [ Background Tasks ]
-if #Players:GetPlayers() > 1 then
-    evacuateServer("Pre-existing player DETECTED!")
-end
- 
-Players.PlayerAdded:Connect(function(newPlayer)
-    if newPlayer ~= LocalPlayer then
-        evacuateServer("Player entry detected (" .. newPlayer.Name .. "). Executing immediate escape.")
-    end
-end)
- 
-task.spawn(function()
-    task.wait(60.0)
-    if PlayAgainRemote then
-        pcall(function() PlayAgainRemote:FireServer() end)
-    end
-end)
- 
-LocalPlayer.Character:GetAttributeChangedSignal("Dead"):Connect(function()
-    pcall(function() PlayAgainRemote:FireServer() end)
-end)
- 
-runPipeline()
