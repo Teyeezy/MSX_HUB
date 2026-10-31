@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Final Version: Original burst/slow speed system, Generator reference, 8 fuels, 2 sequential power boxes, safe final reset.
+-- Locked speed at 30, drops speed on wall collision, Generator reference, 8 fuels, 2 sequential power boxes, safe final reset.
 
 print("Loading")
-print("[ UPDATE ] Restored original burst/slow speed movement system")
+print("[ UPDATE ] Speed locked to 30, with automatic wall-collision slow down")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -126,16 +126,20 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- TRAVEL COMPONENT (ระบบความเร็วแบบต้นฉบับ: Burst Speed สลับ Slow Speed เมื่อชนกำแพง/สิ่งกีดขวาง)
+-- TRAVEL COMPONENT (ล็อกความเร็วที่ 30 เป็นหลัก แต่จะลดเหลือ 7 ชั่วคราวเฉพาะตอนชนกำแพง/สิ่งกีดขวาง)
 local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    local BURST_SPEED, SLOW_SPEED = 75, 7
-    local CLEARANCE_COOLDOWN, SLOW_ZONE_DURATION = 0.5, 0.35
+    
+    local NORMAL_SPEED = 30
+    local SLOW_SPEED = 7
+    local CLEARANCE_COOLDOWN = 0.5
     local lastWallDetectedTime = 0
+    
     local lockedYHeight = humanoidRootPart.Position.Y
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.FilterDescendantsInstances = {character}
+    
     local heartbeatEvent = RunService.Heartbeat
  
     while true do
@@ -156,15 +160,16 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
         end
  
         local direction = remainingVector.Unit
-        if workspace:Raycast(currentPos, direction * 5, raycastParams) then
+        
+        -- เช็กสิ่งกีดขวางด้านหน้า
+        local rayResult = workspace:Raycast(currentPos, direction * 5, raycastParams)
+        if rayResult and rayResult.Instance and rayResult.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
         end
  
-        local currentAllowedSpeed = SLOW_SPEED
-        if os.clock() - lastWallDetectedTime >= CLEARANCE_COOLDOWN then
-            if (workspace:GetServerTimeNow() % 1.0) < (1.0 - SLOW_ZONE_DURATION) then
-                currentAllowedSpeed = BURST_SPEED
-            end
+        local currentAllowedSpeed = NORMAL_SPEED
+        if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
+            currentAllowedSpeed = SLOW_SPEED -- ลดความเร็วเฉพาะตอนชนสิ่งกีดขวาง
         end
  
         local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
