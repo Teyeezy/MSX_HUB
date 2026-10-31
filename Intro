@@ -190,7 +190,8 @@ local function runPipeline()
     print("[Pipeline] Initiating Complete Sequence...")
     task.wait(0.3)
  
-    -- STEP 1: Loop 5 Fuels
+    -- STEP 1: Loop 5 Fuels (บังคับหาให้ครบ 5 ชิ้น)
+    local collectedCount = 0
     for i = 1, 5 do
         local fuel = getClosestFuelPosition(humanoidRootPart.Position)
         if fuel then
@@ -198,12 +199,19 @@ local function runPipeline()
             adaptiveCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
             task.wait(0.3)
             FuelTeleport(humanoidRootPart, fuel)
+            excludeFuel[fuel] = true -- บันทึกเพื่อไม่ให้วิ่งกลับมาหยิบซ้ำ
+            collectedCount = collectedCount + 1
+            task.wait(0.5)
+        else
+            print("[Warning] Fuel not found for step " .. i .. ", skipping...")
             task.wait(0.5)
         end
     end
  
+    print("[Pipeline] Collected " .. collectedCount .. " fuels. Moving to Power Boxes...")
+
     -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially
-    print("[Step 6] Scanning for Power Box models...")
+    print("[Step] Scanning for Power Box models...")
     local powerBoxData = {}
     local interactionSuccess = false
  
@@ -222,13 +230,11 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
-        -- จัดเรียงลำดับจากอันที่ใกล้ที่สุดไปหาไกลที่สุด
         local currentPos = humanoidRootPart.Position
         table.sort(powerBoxData, function(a, b)
             return (currentPos - a.Position).Magnitude < (currentPos - b.Position).Magnitude
         end)
  
-        -- วนลูปเปิด Power Box 2 อันดับแรก (อันที่ 1 และอันที่ 2 ที่ใกล้ที่สุด)
         for boxIndex = 1, math.min(2, #powerBoxData) do
             local chosenBox = powerBoxData[boxIndex].Instance
             local finalBoxTarget = powerBoxData[boxIndex].Position
