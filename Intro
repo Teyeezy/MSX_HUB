@@ -204,7 +204,7 @@ local function runPipeline()
  
     -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
     local collectedCount = 0
-    while collectedCount < 7 do
+    while collectedCount < 2 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
             collectedCount = collectedCount + 1
