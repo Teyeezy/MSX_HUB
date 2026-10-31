@@ -1,6 +1,65 @@
--- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Updated: Target specifically the 2nd furthest Power Box sorted by Generator distance.
+-- === BLACK SCREEN & STATS GUI (Gem & Time) ===
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
+-- สร้าง ScreenGui หลัก
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FarmStatsGui"
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- สร้างพื้นหลังสีดำเต็มจอ
+local BlackBackground = Instance.new("Frame")
+BlackBackground.Name = "Background"
+BlackBackground.Size = UDim2.new(1, 0, 1, 0)
+BlackBackground.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+BlackBackground.BorderSizePixel = 0
+BlackBackground.Parent = ScreenGui
+
+-- สร้างกล่องข้อความสถานะ
+local TextLabel = Instance.new("TextLabel")
+TextLabel.Name = "StatusText"
+TextLabel.Size = UDim2.new(0, 500, 0, 150)
+TextLabel.Position = UDim2.new(0.5, -250, 0.5, -75)
+TextLabel.BackgroundTransparency = 1
+TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextLabel.TextSize = 22
+TextLabel.Font = Enum.Font.GothamBold
+TextLabel.TextXAlignment = Enum.TextXAlignment.Center
+TextLabel.TextYAlignment = Enum.TextYAlignment.Center
+TextLabel.Parent = ScreenGui
+
+-- ระบบจับเวลาและอัปเดตข้อมูล Gems
+local startTime = os.clock()
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local elapsedSeconds = math.floor(os.clock() - startTime)
+        local minutes = math.floor(elapsedSeconds / 60)
+        local seconds = elapsedSeconds % 60
+        local timeString = string.format("%02d:%02d", minutes, seconds)
+        
+        local gems = 0
+        local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+        if leaderstats then
+            local gemStat = leaderstats:FindFirstChild("Gems") or leaderstats:FindFirstChild("Gem") or leaderstats:FindFirstChild("Diamonds")
+            if gemStat then
+                gems = gemStat.Value
+            end
+        end
+        
+        TextLabel.Text = "🤖 กำลังรันระบบฟาร์มอัตโนมัติ...\n\n" ..
+                         "💎 Gems ที่มี: " .. tostring(gems) .. "\n" ..
+                         "⏱️ เวลาที่ใช้: " .. timeString
+    end
+end)
+
+-- ==========================================
+-- MAIN SCRIPT
+-- ==========================================
 print("Loading")
 print("[ UPDATE ] Configured to target the 2nd furthest Power Box based on Generator distance")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
@@ -19,12 +78,9 @@ print("Complete! Starting the farm.")
  
 -- SERVICES --
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
  
 -- --- CONFIGURATION & REFERENCES ---
-local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
 local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
 local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
@@ -81,7 +137,7 @@ local function getGeneratorPosition()
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
  
--- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
+-- Find Fuel
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
     local foundValidFuel = nil
@@ -96,12 +152,12 @@ local function getBestFuelPosition(genPos, currentPos)
                     local fuelPos = item:GetPivot().Position
                     local distFromGen = (genPos - fuelPos).Magnitude
                     local distFromPlayer = (currentPos - fuelPos).Magnitude
-                    
+                     
                     local score = distFromGen
                     if distFromPlayer < 12 then
                         score = distFromPlayer * 0.5
                     end
-                    
+                     
                     if score < bestScore then
                         bestScore = score
                         bestTarget = item
@@ -133,29 +189,29 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
+-- SMART TRAVEL COMPONENT
 local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    
+     
     local NORMAL_SPEED = 30
     local SLOW_SPEED = 7
     local CLEARANCE_COOLDOWN = 0.4
     local lastWallDetectedTime = 0
-    
+     
     local lockedYHeight = humanoidRootPart.Position.Y
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.FilterDescendantsInstances = {character}
-    
+     
     local heartbeatEvent = RunService.Heartbeat
- 
+
     while true do
         if not humanoidRootPart or not humanoidRootPart.Parent then break end
         local deltaTime = heartbeatEvent:Wait()
         local currentPos = humanoidRootPart.Position
         local remainingVector = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z) - currentPos
         local totalDistance = remainingVector.Magnitude
- 
+
         if totalDistance <= 2.0 then
             humanoidRootPart.CFrame = CFrame.new(finalTarget)
             humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0)
@@ -165,13 +221,13 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
             humanoidRootPart.Anchored = false
             break
         end
- 
+
         local direction = remainingVector.Unit
-        
+         
         local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
         local leftRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(-30), 0) * direction) * 5, raycastParams)
         local rightRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(30), 0) * direction) * 5, raycastParams)
-        
+         
         if primaryRay and primaryRay.Instance and primaryRay.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
             if leftRay and not (leftRay.Instance and leftRay.Instance.CanCollide) then
@@ -180,12 +236,12 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
                 direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
             end
         end
- 
+
         local currentAllowedSpeed = NORMAL_SPEED
         if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
             currentAllowedSpeed = SLOW_SPEED
         end
- 
+
         local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
         humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
@@ -202,7 +258,7 @@ local function runPipeline()
  
     local genPos = getGeneratorPosition()
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
+    -- เก็บ Fuel 2 ชิ้น
     local collectedCount = 0
     while collectedCount < 2 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
@@ -226,7 +282,7 @@ local function runPipeline()
  
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
 
-    -- STEP 2: Scan and Target the 2nd Furthest Power Box (ไกลเป็นลำดับที่ 2 จาก Generator)
+    -- STEP 2: Scan and Target the 2nd Furthest Power Box
     local powerBoxData = {}
     local boxOpenedSuccessfully = false
  
@@ -247,12 +303,10 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
-        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
-        -- เลือก Power Box ตัวที่ไกลเป็นลำดับที่ 2 (ถ้ามีหลายตัว ให้เอาตัวรองสุดท้าย หรือตัวที่ 2 ถ้านับจากตัวไกลสุด)
         local targetIndex = #powerBoxData >= 2 and 2 or 1
         local chosenBoxData = powerBoxData[targetIndex]
         local chosenBox = chosenBoxData.Instance
