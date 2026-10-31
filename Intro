@@ -1,6 +1,5 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
 -- Updated: Target specifically the 2nd furthest Power Box sorted by Generator distance.
--- + Status GUI (เวลาที่ใช้ / ขั้นตอนปัจจุบัน / จำนวนเชื้อเพลิง / สถานะ Power Box)
 
 print("Loading")
 print("[ UPDATE ] Configured to target the 2nd furthest Power Box based on Generator distance")
@@ -8,218 +7,32 @@ print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
-
+ 
+local ContentProvider = game:GetService("ContentProvider")
+while ContentProvider.RequestQueueSize > 0 do
+    task.wait(0.5)
+end
+ 
+print("The game is loaded in. Wait more for things to fully load")
+task.wait(6.0)
+print("Complete! Starting the farm.")
+ 
 -- SERVICES --
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local ContentProvider = game:GetService("ContentProvider")
-
-local LocalPlayer = Players.LocalPlayer
-
--- --- SETTINGS ---
-local FUEL_TARGET = 2 -- จำนวนเชื้อเพลิงที่จะเก็บ (แก้ตรงนี้ได้)
-
--- ==================== GUI ====================
-local startTime = os.clock()
-local timerRunning = true
-local gui = {}
-
-local function createGui()
-    local parent
-    pcall(function()
-        parent = (gethui and gethui()) or game:GetService("CoreGui")
-    end)
-    if not parent then
-        parent = LocalPlayer:WaitForChild("PlayerGui")
-    end
-
-    local old = parent:FindFirstChild("AutoFarmStatusGui")
-    if old then old:Destroy() end
-
-    local screen = Instance.new("ScreenGui")
-    screen.Name = "AutoFarmStatusGui"
-    screen.ResetOnSpawn = false
-    screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screen.Parent = parent
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 280, 0, 210)
-    frame.Position = UDim2.new(0, 20, 0.5, -105)
-    frame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-    frame.BorderSizePixel = 0
-    frame.Active = true
-    frame.Parent = screen
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
-    local stroke = Instance.new("UIStroke", frame)
-    stroke.Color = Color3.fromRGB(70, 130, 255)
-    stroke.Thickness = 1.5
-
-    -- Title bar (ลากเพื่อย้ายได้)
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 32)
-    title.BackgroundColor3 = Color3.fromRGB(40, 70, 150)
-    title.BorderSizePixel = 0
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 15
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.Text = "  ⚡ Auto Farm Status"
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = frame
-    Instance.new("UICorner", title).CornerRadius = UDim.new(0, 10)
-
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 26, 0, 22)
-    closeBtn.Position = UDim2.new(1, -32, 0, 5)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-    closeBtn.Text = "X"
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 13
-    closeBtn.TextColor3 = Color3.new(1, 1, 1)
-    closeBtn.BorderSizePixel = 0
-    closeBtn.Parent = title
-    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
-    closeBtn.MouseButton1Click:Connect(function()
-        screen:Destroy()
-    end)
-
-    local function makeRow(y, caption)
-        local cap = Instance.new("TextLabel")
-        cap.Size = UDim2.new(0, 90, 0, 22)
-        cap.Position = UDim2.new(0, 12, 0, y)
-        cap.BackgroundTransparency = 1
-        cap.Font = Enum.Font.Gotham
-        cap.TextSize = 13
-        cap.TextColor3 = Color3.fromRGB(160, 170, 190)
-        cap.TextXAlignment = Enum.TextXAlignment.Left
-        cap.Text = caption
-        cap.Parent = frame
-
-        local val = Instance.new("TextLabel")
-        val.Size = UDim2.new(1, -110, 0, 22)
-        val.Position = UDim2.new(0, 100, 0, y)
-        val.BackgroundTransparency = 1
-        val.Font = Enum.Font.GothamMedium
-        val.TextSize = 13
-        val.TextColor3 = Color3.new(1, 1, 1)
-        val.TextXAlignment = Enum.TextXAlignment.Left
-        val.TextTruncate = Enum.TextTruncate.AtEnd
-        val.Text = "-"
-        val.Parent = frame
-        return val
-    end
-
-    gui.Step = makeRow(42, "ขั้นตอน:")
-    gui.Time = makeRow(68, "เวลาที่ใช้:")
-    gui.Fuel = makeRow(94, "เชื้อเพลิง:")
-    gui.Box = makeRow(150, "Power Box:")
-    gui.Result = makeRow(176, "ผลลัพธ์:")
-
-    -- Progress bar เชื้อเพลิง
-    local barBg = Instance.new("Frame")
-    barBg.Size = UDim2.new(1, -24, 0, 10)
-    barBg.Position = UDim2.new(0, 12, 0, 122)
-    barBg.BackgroundColor3 = Color3.fromRGB(50, 50, 62)
-    barBg.BorderSizePixel = 0
-    barBg.Parent = frame
-    Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
-
-    local barFill = Instance.new("Frame")
-    barFill.Size = UDim2.new(0, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(80, 220, 120)
-    barFill.BorderSizePixel = 0
-    barFill.Parent = barBg
-    Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
-    gui.BarFill = barFill
-
-    -- Drag
-    local dragging, dragStart, startPos
-    title.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    gui.Screen = screen
-end
-
-local function formatTime(t)
-    local m = math.floor(t / 60)
-    local s = t - m * 60
-    return string.format("%02d:%04.1f", m, s)
-end
-
-local function setStep(text)
-    if gui.Step then gui.Step.Text = text end
-end
-
-local function setFuel(count)
-    if gui.Fuel then gui.Fuel.Text = count .. " / " .. FUEL_TARGET .. " ชิ้น" end
-    if gui.BarFill then
-        local ratio = math.clamp(count / math.max(FUEL_TARGET, 1), 0, 1)
-        gui.BarFill:TweenSize(UDim2.new(ratio, 0, 1, 0), "Out", "Quad", 0.25, true)
-    end
-end
-
-local function setBox(text, color)
-    if gui.Box then
-        gui.Box.Text = text
-        gui.Box.TextColor3 = color or Color3.new(1, 1, 1)
-    end
-end
-
-local function setResult(text, color)
-    if gui.Result then
-        gui.Result.Text = text
-        gui.Result.TextColor3 = color or Color3.new(1, 1, 1)
-    end
-end
-
-createGui()
-setStep("กำลังโหลดเกม...")
-setFuel(0)
-setBox("รอดำเนินการ", Color3.fromRGB(200, 200, 200))
-setResult("กำลังทำงาน...", Color3.fromRGB(255, 210, 90))
-
-RunService.Heartbeat:Connect(function()
-    if timerRunning and gui.Time then
-        gui.Time.Text = formatTime(os.clock() - startTime)
-    end
-end)
-
--- ==================== LOADING ====================
-local waited = 0
-while ContentProvider.RequestQueueSize > 0 do
-    task.wait(0.5)
-end
-
-print("The game is loaded in. Wait more for things to fully load")
-setStep("รอให้เกมโหลดสมบูรณ์")
-task.wait(6.0)
-print("Complete! Starting the farm.")
-
+ 
 -- --- CONFIGURATION & REFERENCES ---
+local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
 local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
 local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-
+ 
 local cachedGeneratorLocation = nil
 local PermanentNoclipEnabled = true
-
+ 
 -- --- NOCLIP ENGINE ---
 local function StartPermanentNoclip()
     local noclipConnection = nil
@@ -248,7 +61,7 @@ local function StartPermanentNoclip()
     end)
 end
 StartPermanentNoclip()
-
+ 
 -- Get Generator Position
 local function getGeneratorPosition()
     if cachedGeneratorLocation then return cachedGeneratorLocation end
@@ -267,7 +80,7 @@ local function getGeneratorPosition()
     end
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
-
+ 
 -- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
@@ -283,12 +96,12 @@ local function getBestFuelPosition(genPos, currentPos)
                     local fuelPos = item:GetPivot().Position
                     local distFromGen = (genPos - fuelPos).Magnitude
                     local distFromPlayer = (currentPos - fuelPos).Magnitude
-
+                    
                     local score = distFromGen
                     if distFromPlayer < 12 then
                         score = distFromPlayer * 0.5
                     end
-
+                    
                     if score < bestScore then
                         bestScore = score
                         bestTarget = item
@@ -305,7 +118,7 @@ local function getBestFuelPosition(genPos, currentPos)
     end
     return foundValidFuel
 end
-
+ 
 local function FuelTeleport(hrp, targetFuel)
     local generatorLoc = getGeneratorPosition()
     if not hrp or not targetFuel or not generatorLoc then return end
@@ -319,30 +132,30 @@ local function FuelTeleport(hrp, targetFuel)
         task.wait(0.15)
     end
 end
-
+ 
 -- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
 local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-
+    
     local NORMAL_SPEED = 30
     local SLOW_SPEED = 7
     local CLEARANCE_COOLDOWN = 0.4
     local lastWallDetectedTime = 0
-
+    
     local lockedYHeight = humanoidRootPart.Position.Y
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.FilterDescendantsInstances = {character}
-
+    
     local heartbeatEvent = RunService.Heartbeat
-
+ 
     while true do
         if not humanoidRootPart or not humanoidRootPart.Parent then break end
         local deltaTime = heartbeatEvent:Wait()
         local currentPos = humanoidRootPart.Position
         local remainingVector = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z) - currentPos
         local totalDistance = remainingVector.Magnitude
-
+ 
         if totalDistance <= 2.0 then
             humanoidRootPart.CFrame = CFrame.new(finalTarget)
             humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0)
@@ -352,13 +165,13 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
             humanoidRootPart.Anchored = false
             break
         end
-
+ 
         local direction = remainingVector.Unit
-
+        
         local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
         local leftRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(-30), 0) * direction) * 5, raycastParams)
         local rightRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(30), 0) * direction) * 5, raycastParams)
-
+        
         if primaryRay and primaryRay.Instance and primaryRay.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
             if leftRay and not (leftRay.Instance and leftRay.Instance.CanCollide) then
@@ -367,52 +180,39 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
                 direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
             end
         end
-
+ 
         local currentAllowedSpeed = NORMAL_SPEED
         if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
             currentAllowedSpeed = SLOW_SPEED
         end
-
+ 
         local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
         humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
     end
 end
-
+ 
 -- --- PIPELINE EXECUTION ENGINE ---
 local function runPipeline()
     print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
     local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-
-    -- เริ่มจับเวลาใหม่ตอนเริ่มฟาร์มจริง
-    startTime = os.clock()
-    timerRunning = true
-
+ 
     print("[Pipeline] Initiating Complete Sequence...")
-    setStep("เริ่มต้นระบบ...")
     task.wait(0.3)
-
+ 
     local genPos = getGeneratorPosition()
-
-    -- STEP 1: วนลูปเก็บ Fuel
+ 
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
     local collectedCount = 0
-    local attempt = 0
-    while collectedCount < FUEL_TARGET do
-        setStep("ค้นหาเชื้อเพลิง...")
+    while collectedCount < 2 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
-            attempt = attempt + 1
-            print("[Step] Moving to fuel #" .. (collectedCount + 1))
-            setStep("เดินไปเชื้อเพลิงชิ้นที่ " .. (collectedCount + 1))
+            collectedCount = collectedCount + 1
+            print("[Step] Moving to fuel #" .. collectedCount)
             smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
             task.wait(0.3)
-
-            setStep("ขนเชื้อเพลิงไปที่ Generator (" .. (collectedCount + 1) .. ")")
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-
-            collectedCount = collectedCount + 1
-            setFuel(collectedCount)
 
             local pos = humanoidRootPart.Position
             humanoidRootPart.CFrame = CFrame.new(pos.X, genPos.Y + 1, pos.Z)
@@ -420,19 +220,16 @@ local function runPipeline()
             task.wait(0.5)
         else
             print("[Pipeline] No more fuels found on map. Proceeding with " .. collectedCount .. " fuels...")
-            setStep("ไม่พบเชื้อเพลิงเพิ่ม ไปขั้นตอนถัดไป")
             break
         end
     end
-
+ 
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
-    setStep("สแกนหา Power Box...")
-    setBox("กำลังสแกน...", Color3.fromRGB(255, 210, 90))
 
-    -- STEP 2: Scan and Target the 2nd Furthest Power Box
+    -- STEP 2: Scan and Target the 2nd Furthest Power Box (ไกลเป็นลำดับที่ 2 จาก Generator)
     local powerBoxData = {}
     local boxOpenedSuccessfully = false
-
+ 
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         local tiles = MapFolder.Tiles:GetChildren()
         for i = 1, #tiles do
@@ -448,27 +245,26 @@ local function runPipeline()
             end
         end
     end
-
+ 
     if #powerBoxData > 0 then
+        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
-
+ 
+        -- เลือก Power Box ตัวที่ไกลเป็นลำดับที่ 2 (ถ้ามีหลายตัว ให้เอาตัวรองสุดท้าย หรือตัวที่ 2 ถ้านับจากตัวไกลสุด)
         local targetIndex = #powerBoxData >= 2 and 2 or 1
         local chosenBoxData = powerBoxData[targetIndex]
         local chosenBox = chosenBoxData.Instance
         local finalBoxTarget = chosenBoxData.Position
-
+ 
         print("[Step] Targeting the 2nd furthest Power Box from Generator.")
-        setStep("เดินไป Power Box (พบ " .. #powerBoxData .. " ตัว)")
-        setBox("กำลังเดินไป...", Color3.fromRGB(255, 210, 90))
         smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
         task.wait(0.5)
-
+ 
         if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
             local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
             if prompt then
-                setStep("กำลังเปิด Power Box...")
                 for i = 1, 3 do
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
@@ -481,40 +277,26 @@ local function runPipeline()
                 end
                 print("[Pipeline] 2nd furthest Power Box interaction forced!")
                 boxOpenedSuccessfully = true
-                setBox("เปิดสำเร็จ ✔", Color3.fromRGB(80, 220, 120))
-            else
-                setBox("ไม่พบ Prompt ✘", Color3.fromRGB(255, 90, 90))
             end
-        else
-            setBox("เข้าไม่ถึง ✘", Color3.fromRGB(255, 90, 90))
         end
 
         local boxPos = finalBoxTarget
         humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
         task.wait(0.5)
-    else
-        setBox("ไม่พบ Power Box ✘", Color3.fromRGB(255, 90, 90))
     end
-
+ 
     -- --- VOTE PLAY AGAIN SEQUENCE ---
-    task.wait(1.0)
+    task.wait(1.0) 
     if boxOpenedSuccessfully then
-        setStep("โหวตเล่นอีกครั้ง")
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
             pcall(function()
                 PlayAgainRemote:FireServer()
             end)
             print("[Play Again] Task completed successfully. Resetting game.")
         end
-        timerRunning = false
-        setStep("เสร็จสิ้น")
-        setResult("สำเร็จ ✔ (" .. formatTime(os.clock() - startTime) .. ")", Color3.fromRGB(80, 220, 120))
     else
         print("[Warning] Could not open the target power box. Skipping reset.")
-        timerRunning = false
-        setStep("หยุดทำงาน")
-        setResult("ล้มเหลว ✘ ข้ามการรีเซ็ต", Color3.fromRGB(255, 90, 90))
     end
 end
-
+ 
 runPipeline()
