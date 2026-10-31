@@ -1,15 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
- 
--- Feel free to adjust
--- The ultimate solo gem farming (Slapped some stuff with AI so no hate :) )
--- Remember to put this into auto-execution folder or smth, each run is completed in around 25-35 seconds so 2-2.4 gems/min
--- This is FREE and KEYLESS
--- You shall not copy this code and add key system on top of it for pure greediness. Don't be like Racky in Rscript where he tries to make money off from mine without adding new stuff LOL (seriously, add some unique stuff that makes it worth the trouble)
--- You can modify it and give credits, it's fine :PP
- 
--- The script works like this: finds two fuels to upgrade the generator -> go fix the closest power plant (main way to get gem)
+-- Updated: Target specifically the 2nd furthest Power Box sorted by Generator distance.
+
 print("Loading")
-print("[ UPDATE ] Changed the movement function so it's burst speed so it should be faster than original one")
+print("[ UPDATE ] Configured to target the 2nd furthest Power Box based on Generator distance")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -21,10 +14,8 @@ while ContentProvider.RequestQueueSize > 0 do
 end
  
 print("The game is loaded in. Wait more for things to fully load")
--- This is based on your pings so the finding fuel function doesn't break (adjust it to your liking)
 task.wait(6.0)
 print("Complete! Starting the farm.")
- 
  
 -- SERVICES --
 local Workspace = game:GetService("Workspace")
@@ -36,136 +27,49 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
 local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
-local AdjustBackpackRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tools"):WaitForChild("AdjustBackpack")
 local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
  
 local cachedGeneratorLocation = nil
 local PermanentNoclipEnabled = true
  
--- --- Safety First Lads You gotta be the sneakiest to be the ultimate gem grinder ---
-local function evacuateServer(reason)
-    warn("[CRITICAL EVACUATION]: " .. reason)
-    task.spawn(function()
-        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
-            pcall(function()
-                PlayAgainRemote:FireServer()
-            end)
-            print("ESCAPING BY PLAYING AGAIN")
-            task.wait(1.0) -- Waiting for the remote to work
-        end
- 
-        -- 2. Forceful escape by getting kicked if the remote is slow as heck
-        LocalPlayer:Kick("[WARNING] UNKNOWN PLAYER DETECTED!")
-    end)
- 
-	-- Stops the script immediately
-    error("Script execution terminated.")
-end
- 
--- --- BACKGROUND SERVICE: PERMANENT NOCLIP ENGINE ---
+-- --- NOCLIP ENGINE ---
 local function StartPermanentNoclip()
     local noclipConnection = nil
- 
     local function ConnectNoclip()
         if noclipConnection then noclipConnection:Disconnect() end
- 
         noclipConnection = RunService.Stepped:Connect(function()
             if not PermanentNoclipEnabled then
                 if noclipConnection then noclipConnection:Disconnect() end
                 return
             end
- 
             if character then
-                -- Instantly strips all collisions before physics steps process
                 for _, child in ipairs(character:GetDescendants()) do
                     if child:IsA("BasePart") and child.CanCollide then
                         child.CanCollide = false
                     end
                 end
- 
-                -- Zeroes velocity to stop anti-cheat rubberbanding
                 local hrp = character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                end
+                if hrp then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
             end
         end)
     end
- 
     ConnectNoclip()
- 
-    -- Re-applies the permanent noclip loop whenever you respawn
     LocalPlayer.CharacterAdded:Connect(function()
         task.wait(0.1)
         ConnectNoclip()
     end)
 end
- 
 StartPermanentNoclip()
  
--- Find the closest fuel's location
-local excludeFuel = {}
- 
-local function getClosestFuelPosition(currentPos)
-    local foundValidFuel = nil
- 
-    -- This loop will continuously retry until a valid item is found or none remain
-    while not foundValidFuel do
-        local bestTarget = nil
-        local shortestDistance = math.huge
- 
-        if DroppedItemsFolder then
-            for _, item in ipairs(DroppedItemsFolder:GetChildren()) do
-                if item.Name == "Fuel" then
-                    -- Check if this is in the exclusion table
-                    if not excludeFuel[item] then
-                        local fuelPos = item:GetPivot().Position
-                        local dist = (currentPos - fuelPos).Magnitude
- 
-                        -- Track the temporary closest item for this specific scan cycle
-                        if dist < shortestDistance then
-                            shortestDistance = dist
-                            bestTarget = item
-                        end
-                    end
-                end
-            end
-        end
- 
-        -- If no good fuel exist, uh we exit and everything breaks but this ain't happening I'm sure
-        if not bestTarget then
-            break
-        end
- 
-        -- Checking if the fuel is on top of a tall object to ignore
-        local targetPosition = bestTarget:GetPivot().Position
-        local heightDifference = targetPosition.Y - currentPos.Y
- 
-        if heightDifference <= 2 then
-            -- CRITERIA MET: Assign the item to exit the retry loop successfully
-            foundValidFuel = bestTarget
-        else
-            -- CRITERIA FAILED: Add this specific item instance to the exclusion table
-            print("[-] Fuel anomaly detected at height: " .. tostring(targetPosition.Y) .. ". Excluding item.")
-            excludeFuel[bestTarget] = true
-        end
-    end
- 
-    -- Returns the item instance (or nil if the map is empty) to prevent unassigned runtime exceptions
-    return foundValidFuel
-end
- 
+-- Get Generator Position
 local function getGeneratorPosition()
     if cachedGeneratorLocation then return cachedGeneratorLocation end
-    if MapFolder then
-        local tiles = MapFolder:FindFirstChild("Tiles")
-        if tiles then
-            for _, child in ipairs(tiles:GetChildren()) do
-                if child.Name == "Generator" or child:FindFirstChild("Generator") then
-                    cachedGeneratorLocation = child:GetPivot().Position
-                    return cachedGeneratorLocation
-                end
+    if MapFolder and MapFolder.Tiles then
+        for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
+            if child.Name == "Generator" or child:FindFirstChild("Generator") then
+                cachedGeneratorLocation = child:GetPivot().Position
+                return cachedGeneratorLocation
             end
         end
     end
@@ -174,110 +78,117 @@ local function getGeneratorPosition()
         cachedGeneratorLocation = fallbackGen:GetPivot().Position
         return cachedGeneratorLocation
     end
-    return nil
+    return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
  
--- The more overpowered version, it can literally teleport fuel to the generator (People gonna skid this thing hard trust me)
+-- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
+local excludeFuel = {}
+local function getBestFuelPosition(genPos, currentPos)
+    local foundValidFuel = nil
+    while not foundValidFuel do
+        local bestTarget = nil
+        local bestScore = math.huge
+        if DroppedItemsFolder then
+            local items = DroppedItemsFolder:GetChildren()
+            for i = 1, #items do
+                local item = items[i]
+                if item.Name == "Fuel" and not excludeFuel[item] then
+                    local fuelPos = item:GetPivot().Position
+                    local distFromGen = (genPos - fuelPos).Magnitude
+                    local distFromPlayer = (currentPos - fuelPos).Magnitude
+                    
+                    local score = distFromGen
+                    if distFromPlayer < 12 then
+                        score = distFromPlayer * 0.5
+                    end
+                    
+                    if score < bestScore then
+                        bestScore = score
+                        bestTarget = item
+                    end
+                end
+            end
+        end
+        if not bestTarget then break end
+        if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 15 then
+            foundValidFuel = bestTarget
+        else
+            excludeFuel[bestTarget] = true
+        end
+    end
+    return foundValidFuel
+end
+ 
 local function FuelTeleport(hrp, targetFuel)
     local generatorLoc = getGeneratorPosition()
     if not hrp or not targetFuel or not generatorLoc then return end
- 
     local fuelUnion = targetFuel:FindFirstChild("Union") or targetFuel.PrimaryPart
     local itemDrag = targetFuel:FindFirstChild("ItemDrag")
     local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
- 
     if fuelUnion and networkRemote then
-        -- Hippity Hoppity the fuel is now my property
-        pcall(function()
-            networkRemote:FireServer(fuelUnion)
-        end)
- 
-        -- small delay so it doesn't blow up
-        task.wait(0.12) 
- 
-        -- Instantly teleport item directly to the generator
-        pcall(function()
-            targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1, 0))
-        end)
- 
-        -- small delay so it doesn't blow up
-        task.wait(0.15) 
+        pcall(function() networkRemote:FireServer(fuelUnion) end)
+        task.wait(0.12)
+        pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1, 0)) end)
+        task.wait(0.15)
     end
 end
  
--- TRAVEL COMPONENT
-local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
+-- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
+local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
- 
-    -- --- MAXIMUM AGGRESSION TESTING ---
-    local BURST_SPEED = 75
+    
+    local NORMAL_SPEED = 30
     local SLOW_SPEED = 7
- 
-    local CLEARANCE_COOLDOWN = 0.5  
-    local SLOW_ZONE_DURATION = 0.35
- 
+    local CLEARANCE_COOLDOWN = 0.4
     local lastWallDetectedTime = 0
+    
     local lockedYHeight = humanoidRootPart.Position.Y
- 
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {character} 
- 
-    local RunService = game:GetService("RunService")
+    raycastParams.FilterDescendantsInstances = {character}
+    
     local heartbeatEvent = RunService.Heartbeat
  
     while true do
         if not humanoidRootPart or not humanoidRootPart.Parent then break end
- 
-        -- Frame-lock sync wait (Riding the server clock wave)
         local deltaTime = heartbeatEvent:Wait()
- 
         local currentPos = humanoidRootPart.Position
-        local flatTarget = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z)
-        local remainingVector = flatTarget - currentPos
+        local remainingVector = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z) - currentPos
         local totalDistance = remainingVector.Magnitude
  
         if totalDistance <= 2.0 then
             humanoidRootPart.CFrame = CFrame.new(finalTarget)
-            humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0) 
+            humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0)
             humanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             humanoidRootPart.Anchored = true
             task.wait(0.05)
-            humanoidRootPart.Anchored = false 
+            humanoidRootPart.Anchored = false
             break
         end
  
         local direction = remainingVector.Unit
-        local lookAheadDistance = 5
-        local rayResult = workspace:Raycast(currentPos, direction * lookAheadDistance, raycastParams)
- 
-        if rayResult and rayResult.Instance and rayResult.Instance.CanCollide then
+        
+        local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
+        local leftRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(-30), 0) * direction) * 5, raycastParams)
+        local rightRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(30), 0) * direction) * 5, raycastParams)
+        
+        if primaryRay and primaryRay.Instance and primaryRay.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
-        end
- 
-        local currentAllowedSpeed = SLOW_SPEED
- 
-        if os.clock() - lastWallDetectedTime >= CLEARANCE_COOLDOWN then
-            local serverTime = workspace:GetServerTimeNow()
-            local currentSecondFraction = serverTime % 1.0
- 
-            -- Burst for exactly 70% of the server second
-            if currentSecondFraction < (1.0 - SLOW_ZONE_DURATION) then
-                currentAllowedSpeed = BURST_SPEED
+            if leftRay and not (leftRay.Instance and leftRay.Instance.CanCollide) then
+                direction = (CFrame.Angles(0, math.rad(-45), 0) * direction).Unit
+            elseif rightRay and not (rightRay.Instance and rightRay.Instance.CanCollide) then
+                direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
             end
         end
  
-        local frameTravelDistance = currentAllowedSpeed * deltaTime
- 
-        -- Safe overshoot brake so you don't go too far from power box
-        if frameTravelDistance > totalDistance then
-            frameTravelDistance = totalDistance
+        local currentAllowedSpeed = NORMAL_SPEED
+        if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
+            currentAllowedSpeed = SLOW_SPEED
         end
  
+        local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
-        local flattenedPosition = Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z)
- 
-        humanoidRootPart.CFrame = CFrame.new(flattenedPosition)
+        humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
     end
 end
  
@@ -289,33 +200,40 @@ local function runPipeline()
     print("[Pipeline] Initiating Complete Sequence...")
     task.wait(0.3)
  
-    -- STEP 1: Nearest Fuel Remote Teleport
-    local fuelOne = getClosestFuelPosition(humanoidRootPart.Position)
-    if fuelOne then
-        print("[Step 1] Moving to first closest fuel.")
-        adaptiveCrawlTo(fuelOne:GetPivot().Position, humanoidRootPart, character)
-        task.wait(0.3)
-        FuelTeleport(humanoidRootPart, fuelOne)
-        task.wait(0.5)
+    local genPos = getGeneratorPosition()
+ 
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
+    local collectedCount = 0
+    while collectedCount < 2 do
+        local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
+        if fuel then
+            collectedCount = collectedCount + 1
+            print("[Step] Moving to fuel #" .. collectedCount)
+            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
+            task.wait(0.3)
+            FuelTeleport(humanoidRootPart, fuel)
+            excludeFuel[fuel] = true
+
+            local pos = humanoidRootPart.Position
+            humanoidRootPart.CFrame = CFrame.new(pos.X, genPos.Y + 1, pos.Z)
+
+            task.wait(0.5)
+        else
+            print("[Pipeline] No more fuels found on map. Proceeding with " .. collectedCount .. " fuels...")
+            break
+        end
     end
  
-    -- STEP 2: Second Nearest Fuel Remote Teleport
-    local fuelTwo = getClosestFuelPosition(humanoidRootPart.Position)
-    if fuelTwo then
-        print("[Step 2] Moving to second closest fuel.")
-        adaptiveCrawlTo(fuelTwo:GetPivot().Position, humanoidRootPart, character)
-        task.wait(0.3)
-        FuelTeleport(humanoidRootPart, fuelTwo)
-        task.wait(0.5)
-    end
- 
-    -- STEP 3: OPTIMIZED POWER BOX QUERY & TRACKING (ZIP STRAIGHT TO POWER PLANT)
-    print("[Step 3] Scanning for closest Power Box model...")
+    print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
+
+    -- STEP 2: Scan and Target the 2nd Furthest Power Box (ไกลเป็นลำดับที่ 2 จาก Generator)
     local powerBoxData = {}
-    local interactionSuccess = false
+    local boxOpenedSuccessfully = false
  
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
-        for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
+        local tiles = MapFolder.Tiles:GetChildren()
+        for i = 1, #tiles do
+            local child = tiles[i]
             if child.Name == "Power Plant" then
                 local powerBox = child:FindFirstChild("Power Box")
                 if powerBox and powerBox:IsA("Model") then
@@ -329,16 +247,19 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
-        local currentPos = humanoidRootPart.Position
+        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
-            return (currentPos - a.Position).Magnitude < (currentPos - b.Position).Magnitude
+            return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
-        local chosenBox = powerBoxData[1].Instance
-        local finalBoxTarget = powerBoxData[1].Position
+        -- เลือก Power Box ตัวที่ไกลเป็นลำดับที่ 2 (ถ้ามีหลายตัว ให้เอาตัวรองสุดท้าย หรือตัวที่ 2 ถ้านับจากตัวไกลสุด)
+        local targetIndex = #powerBoxData >= 2 and 2 or 1
+        local chosenBoxData = powerBoxData[targetIndex]
+        local chosenBox = chosenBoxData.Instance
+        local finalBoxTarget = chosenBoxData.Position
  
-        print("[Step 3] Crawling directly to closest Power Box.")
-        adaptiveCrawlTo(finalBoxTarget, humanoidRootPart, character)
+        print("[Step] Targeting the 2nd furthest Power Box from Generator.")
+        smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
         task.wait(0.5)
  
         if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
@@ -354,56 +275,28 @@ local function runPipeline()
                     end
                     task.wait(0.1)
                 end
-                print("[Pipeline] Interaction successfully forced!")
-                interactionSuccess = true
+                print("[Pipeline] 2nd furthest Power Box interaction forced!")
+                boxOpenedSuccessfully = true
             end
         end
+
+        local boxPos = finalBoxTarget
+        humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
+        task.wait(0.5)
     end
  
     -- --- VOTE PLAY AGAIN SEQUENCE ---
-    task.wait(0.5) 
-    if interactionSuccess then
- 
+    task.wait(1.0) 
+    if boxOpenedSuccessfully then
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
             pcall(function()
                 PlayAgainRemote:FireServer()
             end)
-            print("[Play Again] Sequence executed successfully.")
-        else
-            warn("[Warning] VotePlayAgain remote path could not be found.")
+            print("[Play Again] Task completed successfully. Resetting game.")
         end
-        print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
+    else
+        print("[Warning] Could not open the target power box. Skipping reset.")
     end
 end
- 
--- [ Background Tasks ]
- 
--- Checking if there is mod already joined
-if #Players:GetPlayers() > 1 then
-    evacuateServer("Pre-existing player DETECTED!")
-end
- 
-Players.PlayerAdded:Connect(function(newPlayer)
-    if newPlayer ~= LocalPlayer then
-        evacuateServer("Player entry detected (" .. newPlayer.Name .. "). Executing immediate escape.")
-    end
-end)
- 
--- If a run somehow fails (either finding fuel function broke or smth), it will do a fresh new run
-task.spawn(function()
-    task.wait(60.0) -- Hard 1-minute safety timeout limit
- 
-    if PlayAgainRemote then
-        print("[WARNING!] Match timeout reached. Restarting a run.")
-        pcall(function()
-            PlayAgainRemote:FireServer()
-        end)
-    end
-end)
- 
--- If you somehow died, it will do a fresh new run
-LocalPlayer.Character:GetAttributeChangedSignal("Dead"):Connect(function()
-    pcall(function() PlayAgainRemote:FireServer() end)
-end)
  
 runPipeline()
