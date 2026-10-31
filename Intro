@@ -1,5 +1,5 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Modified to loop 5 fuels and open 2 Power Boxes sequentially
+-- Modified to loop 7 fuels and open 2 Power Boxes sequentially
 
 print("Loading")
 print("[ UPDATE ] Changed the movement function so it's burst speed so it should be faster than original one")
@@ -190,16 +190,16 @@ local function runPipeline()
     print("[Pipeline] Initiating Complete Sequence...")
     task.wait(0.3)
  
-    -- STEP 1: Loop 5 Fuels (บังคับหาให้ครบ 5 ชิ้น)
+    -- STEP 1: Loop 7 Fuels (ปรับเปลี่ยนจาก 5 เป็น 7 ชิ้น)
     local collectedCount = 0
-    for i = 1, 5 do
+    for i = 1, 7 do
         local fuel = getClosestFuelPosition(humanoidRootPart.Position)
         if fuel then
             print("[Step " .. i .. "] Moving to fuel #" .. i)
             adaptiveCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
             task.wait(0.3)
             FuelTeleport(humanoidRootPart, fuel)
-            excludeFuel[fuel] = true -- บันทึกเพื่อไม่ให้วิ่งกลับมาหยิบซ้ำ
+            excludeFuel[fuel] = true
             collectedCount = collectedCount + 1
             task.wait(0.5)
         else
