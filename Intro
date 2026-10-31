@@ -1,40 +1,301 @@
--- Find Fuel (เลือกชิ้นที่ใกล้ที่สุด โดยเปรียบเทียบระหว่างระยะจากตัวเรา กับ ระยะจาก Generator)
+-- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
+-- Updated: 7 fuels with Hybrid Distance (Generator + Player), smart obstacle avoidance, constant speed 30, and targeting ONLY the farther Power Box.
+
+print("Loading")
+print("[ UPDATE ] Configured to target only the farther Power Box exclusively")
+print("Tell me in Rscript or Scriptblox if there are any bugs")
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+ 
+local ContentProvider = game:GetService("ContentProvider")
+while ContentProvider.RequestQueueSize > 0 do
+    task.wait(0.5)
+end
+ 
+print("The game is loaded in. Wait more for things to fully load")
+task.wait(6.0)
+print("Complete! Starting the farm.")
+ 
+-- SERVICES --
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+ 
+-- --- CONFIGURATION & REFERENCES ---
+local LocalPlayer = Players.LocalPlayer
+local MapFolder = Workspace:FindFirstChild("Map")
+local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
+local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+ 
+local cachedGeneratorLocation = nil
+local PermanentNoclipEnabled = true
+ 
+-- --- NOCLIP ENGINE ---
+local function StartPermanentNoclip()
+    local noclipConnection = nil
+    local function ConnectNoclip()
+        if noclipConnection then noclipConnection:Disconnect() end
+        noclipConnection = RunService.Stepped:Connect(function()
+            if not PermanentNoclipEnabled then
+                if noclipConnection then noclipConnection:Disconnect() end
+                return
+            end
+            if character then
+                for _, child in ipairs(character:GetDescendants()) do
+                    if child:IsA("BasePart") and child.CanCollide then
+                        child.CanCollide = false
+                    end
+                end
+                local hrp = character:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+            end
+        end)
+    end
+    ConnectNoclip()
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(0.1)
+        ConnectNoclip()
+    end)
+end
+StartPermanentNoclip()
+ 
+-- Get Generator Position
+local function getGeneratorPosition()
+    if cachedGeneratorLocation then return cachedGeneratorLocation end
+    if MapFolder and MapFolder.Tiles then
+        for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
+            if child.Name == "Generator" or child:FindFirstChild("Generator") then
+                cachedGeneratorLocation = child:GetPivot().Position
+                return cachedGeneratorLocation
+            end
+        end
+    end
+    local fallbackGen = Workspace:FindFirstChild("Generator", true)
+    if fallbackGen then
+        cachedGeneratorLocation = fallbackGen:GetPivot().Position
+        return cachedGeneratorLocation
+    end
+    return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
+end
+ 
+-- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
-    local foundValidFuel = nil
-    while not foundValidFuel do
-        local bestTarget = nil
-        local bestDistance = math.huge
-        
-        if DroppedItemsFolder then
-            local items = DroppedItemsFolder:GetChildren()
-            for i = 1, #items do
-                local item = items[i]
-                if item.Name == "Fuel" and not excludeFuel[item] then
-                    local fuelPos = item:GetPivot().Position
-                    local distFromGen = (genPos - fuelPos).Magnitude
-                    local distFromPlayer = (currentPos - fuelPos).Magnitude
-                    
-                    -- เทียบดูว่าระยะไหนใกลักว่ากันระหว่าง ตัวเรา หรือ Generator
-                    local shortestDistForThisFuel = math.min(distFromPlayer, distFromGen)
-                    
-                    -- เลือกชิ้นที่ให้ระยะทางที่ใกล้ที่สุด
-                    if shortestDistForThisFuel < bestDistance then
-                        bestDistance = shortestDistForThisFuel
-                        bestTarget = item
-                    end
-                end
-            end
-        end
-        
-        if not bestTarget then break end
-        
-        -- ตรวจสอบระดับความสูง (Y) ไม่ให้เกิน 15 จาก Generator
-        if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 15 then
-            foundValidFuel = bestTarget
-        else
-            excludeFuel[bestTarget] = true
-        end
-    end
-    return foundValidFuel
+    local foundValidFuel = nil
+    while not foundValidFuel do
+        local bestTarget = nil
+        local bestScore = math.huge
+        if DroppedItemsFolder then
+            local items = DroppedItemsFolder:GetChildren()
+            for i = 1, #items do
+                local item = items[i]
+                if item.Name == "Fuel" and not excludeFuel[item] then
+                    local fuelPos = item:GetPivot().Position
+                    local distFromGen = (genPos - fuelPos).Magnitude
+                    local distFromPlayer = (currentPos - fuelPos).Magnitude
+                    
+                    local score = distFromGen
+                    if distFromPlayer < 12 then
+                        score = distFromPlayer * 0.5
+                    end
+                    
+                    if score < bestScore then
+                        bestScore = score
+                        bestTarget = item
+                    end
+                end
+            end
+        end
+        if not bestTarget then break end
+        if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 15 then
+            foundValidFuel = bestTarget
+        else
+            excludeFuel[bestTarget] = true
+        end
+    end
+    return foundValidFuel
 end
+ 
+local function FuelTeleport(hrp, targetFuel)
+    local generatorLoc = getGeneratorPosition()
+    if not hrp or not targetFuel or not generatorLoc then return end
+    local fuelUnion = targetFuel:FindFirstChild("Union") or targetFuel.PrimaryPart
+    local itemDrag = targetFuel:FindFirstChild("ItemDrag")
+    local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
+    if fuelUnion and networkRemote then
+        pcall(function() networkRemote:FireServer(fuelUnion) end)
+        task.wait(0.12)
+        pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1, 0)) end)
+        task.wait(0.15)
+    end
+end
+ 
+-- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
+local function smartCrawlTo(targetPos, humanoidRootPart, character)
+    local finalTarget = targetPos + Vector3.new(0, 3, 0)
+    
+    local NORMAL_SPEED = 30
+    local SLOW_SPEED = 7
+    local CLEARANCE_COOLDOWN = 0.4
+    local lastWallDetectedTime = 0
+    
+    local lockedYHeight = humanoidRootPart.Position.Y
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {character}
+    
+    local heartbeatEvent = RunService.Heartbeat
+ 
+    while true do
+        if not humanoidRootPart or not humanoidRootPart.Parent then break end
+        local deltaTime = heartbeatEvent:Wait()
+        local currentPos = humanoidRootPart.Position
+        local remainingVector = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z) - currentPos
+        local totalDistance = remainingVector.Magnitude
+ 
+        if totalDistance <= 2.0 then
+            humanoidRootPart.CFrame = CFrame.new(finalTarget)
+            humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0)
+            humanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            humanoidRootPart.Anchored = true
+            task.wait(0.05)
+            humanoidRootPart.Anchored = false
+            break
+        end
+ 
+        local direction = remainingVector.Unit
+        
+        local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
+        local leftRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(-30), 0) * direction) * 5, raycastParams)
+        local rightRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(30), 0) * direction) * 5, raycastParams)
+        
+        if primaryRay and primaryRay.Instance and primaryRay.Instance.CanCollide then
+            lastWallDetectedTime = os.clock()
+            if leftRay and not (leftRay.Instance and leftRay.Instance.CanCollide) then
+                direction = (CFrame.Angles(0, math.rad(-45), 0) * direction).Unit
+            elseif rightRay and not (rightRay.Instance and rightRay.Instance.CanCollide) then
+                direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
+            end
+        end
+ 
+        local currentAllowedSpeed = NORMAL_SPEED
+        if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
+            currentAllowedSpeed = SLOW_SPEED
+        end
+ 
+        local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
+        local nextPosition = currentPos + (direction * frameTravelDistance)
+        humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
+    end
+end
+ 
+-- --- PIPELINE EXECUTION ENGINE ---
+local function runPipeline()
+    print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+ 
+    print("[Pipeline] Initiating Complete Sequence...")
+    task.wait(0.3)
+ 
+    local genPos = getGeneratorPosition()
+ 
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
+    local collectedCount = 0
+    while collectedCount < 7 do
+        local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
+        if fuel then
+            collectedCount = collectedCount + 1
+            print("[Step] Moving to fuel #" .. collectedCount)
+            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
+            task.wait(0.3)
+            FuelTeleport(humanoidRootPart, fuel)
+            excludeFuel[fuel] = true
+
+            local pos = humanoidRootPart.Position
+            humanoidRootPart.CFrame = CFrame.new(pos.X, genPos.Y + 1, pos.Z)
+
+            task.wait(0.5)
+        else
+            print("[Pipeline] No more fuels found on map. Proceeding with " .. collectedCount .. " fuels...")
+            break
+        end
+    end
+ 
+    print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
+
+    -- STEP 2: Scan and Target ONLY the Farther Power Box (ข้ามอันใกล้ ไปเปิดอันไกลอันเดียว)
+    local powerBoxData = {}
+    local boxOpenedSuccessfully = false
+ 
+    if MapFolder and MapFolder:FindFirstChild("Tiles") then
+        local tiles = MapFolder.Tiles:GetChildren()
+        for i = 1, #tiles do
+            local child = tiles[i]
+            if child.Name == "Power Plant" then
+                local powerBox = child:FindFirstChild("Power Box")
+                if powerBox and powerBox:IsA("Model") then
+                    table.insert(powerBoxData, {
+                        Instance = powerBox,
+                        Position = powerBox:GetPivot().Position
+                    })
+                end
+            end
+        end
+    end
+ 
+    if #powerBoxData > 0 then
+        -- จัดเรียงจากใกล้ไปไกล Generator
+        table.sort(powerBoxData, function(a, b)
+            return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
+        end)
+ 
+        -- เลือกเฉพาะ Power Box อันที่ไกลที่สุด (index ที่ #powerBoxData หรืออันที่ 2 ถ้ามี)
+        local targetBoxIndex = #powerBoxData >= 2 and 2 or 1
+        local chosenBox = powerBoxData[targetBoxIndex].Instance
+        local finalBoxTarget = powerBoxData[targetBoxIndex].Position
+ 
+        print("[Step] Skipping closest box. Moving directly to the farther Power Box!")
+        smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
+        task.wait(0.5)
+ 
+        if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
+            local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if prompt then
+                for i = 1, 3 do
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    else
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration + 0.05)
+                        prompt:InputHoldEnd()
+                    end
+                    task.wait(0.1)
+                end
+                print("[Pipeline] Farther Power Box interaction forced!")
+                boxOpenedSuccessfully = true
+            end
+        end
+
+        local boxPos = finalBoxTarget
+        humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
+        task.wait(0.5)
+    end
+ 
+    -- --- VOTE PLAY AGAIN SEQUENCE ---
+    task.wait(1.0) 
+    if boxOpenedSuccessfully then
+        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+            pcall(function()
+                PlayAgainRemote:FireServer()
+            end)
+            print("[Play Again] Task completed successfully. Resetting game.")
+        end
+    else
+        print("[Warning] Could not open the farther power box. Skipping reset.")
+    end
+end
+ 
+runPipeline()
