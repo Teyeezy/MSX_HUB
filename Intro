@@ -1,19 +1,17 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Fixed: Nil value protection, stable 7 fuels, hybrid distance, single furthest Power Box, constant speed 30.
+-- Updated: 7 fuels with Hybrid Distance (Generator + Player), smart obstacle avoidance, constant speed 30, and targeting ONLY the farther Power Box.
 
 print("Loading")
-print("[ UPDATE ] Fixed nil value error and stabilized execution")
+print("[ UPDATE ] Configured to target only the farther Power Box exclusively")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
  
 local ContentProvider = game:GetService("ContentProvider")
-pcall(function()
-    while ContentProvider.RequestQueueSize > 0 do
-        task.wait(0.5)
-    end
-end)
+while ContentProvider.RequestQueueSize > 0 do
+    task.wait(0.5)
+end
  
 print("The game is loaded in. Wait more for things to fully load")
 task.wait(6.0)
@@ -29,8 +27,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
 local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
-local RemotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
-local PlayAgainRemote = RemotesFolder and RemotesFolder:FindFirstChild("Misc") and RemotesFolder.Misc:FindFirstChild("VotePlayAgain")
+local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
  
 local cachedGeneratorLocation = nil
@@ -68,7 +65,7 @@ StartPermanentNoclip()
 -- Get Generator Position
 local function getGeneratorPosition()
     if cachedGeneratorLocation then return cachedGeneratorLocation end
-    if MapFolder and MapFolder:FindFirstChild("Tiles") then
+    if MapFolder and MapFolder.Tiles then
         for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
             if child.Name == "Generator" or child:FindFirstChild("Generator") then
                 cachedGeneratorLocation = child:GetPivot().Position
@@ -84,7 +81,7 @@ local function getGeneratorPosition()
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
  
--- Find Fuel (Hybrid Distance)
+-- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
     local foundValidFuel = nil
@@ -113,14 +110,11 @@ local function getBestFuelPosition(genPos, currentPos)
             end
         end
         if not bestTarget then break end
-        pcall(function()
-            if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 15 then
-                foundValidFuel = bestTarget
-            else
-                excludeFuel[bestTarget] = true
-            end
-        end)
-        if not foundValidFuel then break end
+        if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 15 then
+            foundValidFuel = bestTarget
+        else
+            excludeFuel[bestTarget] = true
+        end
     end
     return foundValidFuel
 end
@@ -139,7 +133,7 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- SMART TRAVEL COMPONENT
+-- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
 local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
     
@@ -200,7 +194,7 @@ end
  
 -- --- PIPELINE EXECUTION ENGINE ---
 local function runPipeline()
-    print("Free and Keyless, script is ready")
+    print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
     local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
  
     print("[Pipeline] Initiating Complete Sequence...")
@@ -232,7 +226,7 @@ local function runPipeline()
  
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
 
-    -- STEP 2: Target the 2nd Furthest Power Box (ไกลเป็นลำดับที่ 2 จาก Generator)
+    -- STEP 2: Scan and Target ONLY the Farther Power Box (ข้ามอันใกล้ ไปเปิดอันไกลอันเดียว)
     local powerBoxData = {}
     local boxOpenedSuccessfully = false
  
@@ -253,16 +247,17 @@ local function runPipeline()
     end
  
     if #powerBoxData > 0 then
+        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
-        local targetIndex = #powerBoxData >= 2 and 2 or 1
-        local chosenBoxData = powerBoxData[targetIndex]
-        local chosenBox = chosenBoxData.Instance
-        local finalBoxTarget = chosenBoxData.Position
+        -- เลือกเฉพาะ Power Box อันที่ไกลที่สุด (index ที่ #powerBoxData หรืออันที่ 2 ถ้ามี)
+        local targetBoxIndex = #powerBoxData >= 2 and 2 or 1
+        local chosenBox = powerBoxData[targetBoxIndex].Instance
+        local finalBoxTarget = powerBoxData[targetBoxIndex].Position
  
-        print("[Step] Targeting the 2nd furthest Power Box from Generator.")
+        print("[Step] Skipping closest box. Moving directly to the farther Power Box!")
         smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
         task.wait(0.5)
  
@@ -271,17 +266,15 @@ local function runPipeline()
             if prompt then
                 for i = 1, 3 do
                     if fireproximityprompt then
-                        pcall(function() fireproximityprompt(prompt) end)
+                        fireproximityprompt(prompt)
                     else
-                        pcall(function()
-                            prompt:InputHoldBegin()
-                            task.wait(prompt.HoldDuration + 0.05)
-                            prompt:InputHoldEnd()
-                        end)
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration + 0.05)
+                        prompt:InputHoldEnd()
                     end
                     task.wait(0.1)
                 end
-                print("[Pipeline] Power Box interaction forced!")
+                print("[Pipeline] Farther Power Box interaction forced!")
                 boxOpenedSuccessfully = true
             end
         end
@@ -293,13 +286,15 @@ local function runPipeline()
  
     -- --- VOTE PLAY AGAIN SEQUENCE ---
     task.wait(1.0) 
-    if boxOpenedSuccessfully and PlayAgainRemote then
-        pcall(function()
-            PlayAgainRemote:FireServer()
-        end)
-        print("[Play Again] Task completed successfully. Resetting game.")
+    if boxOpenedSuccessfully then
+        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+            pcall(function()
+                PlayAgainRemote:FireServer()
+            end)
+            print("[Play Again] Task completed successfully. Resetting game.")
+        end
     else
-        print("[Warning] Could not open target power box or remote missing. Skipping reset.")
+        print("[Warning] Could not open the farther power box. Skipping reset.")
     end
 end
  
