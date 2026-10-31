@@ -7,7 +7,7 @@
 -- You shall not copy this code and add key system on top of it for pure greediness. Don't be like Racky in Rscript where he tries to make money off from mine without adding new stuff LOL (seriously, add some unique stuff that makes it worth the trouble)
 -- You can modify it and give credits, it's fine :PP
  
--- The script works like this: finds five fuels to upgrade the generator -> go fix the closest power plant (main way to get gem)
+-- The script works like this: finds two fuels to upgrade the generator -> go fix the closest power plant (main way to get gem)
 print("Loading")
 print("[ UPDATE ] Changed the movement function so it's burst speed so it should be faster than original one")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
@@ -308,39 +308,9 @@ local function runPipeline()
         FuelTeleport(humanoidRootPart, fuelTwo)
         task.wait(0.5)
     end
-
-    -- STEP 3: Third Nearest Fuel Remote Teleport
-    local fuelThree = getClosestFuelPosition(humanoidRootPart.Position)
-    if fuelThree then
-        print("[Step 3] Moving to third closest fuel.")
-        adaptiveCrawlTo(fuelThree:GetPivot().Position, humanoidRootPart, character)
-        task.wait(0.3)
-        FuelTeleport(humanoidRootPart, fuelThree)
-        task.wait(0.5)
-    end
-
-    -- STEP 4: Fourth Nearest Fuel Remote Teleport
-    local fuelFour = getClosestFuelPosition(humanoidRootPart.Position)
-    if fuelFour then
-        print("[Step 4] Moving to fourth closest fuel.")
-        adaptiveCrawlTo(fuelFour:GetPivot().Position, humanoidRootPart, character)
-        task.wait(0.3)
-        FuelTeleport(humanoidRootPart, fuelFour)
-        task.wait(0.5)
-    end
-
-    -- STEP 5: Fifth Nearest Fuel Remote Teleport
-    local fuelFive = getClosestFuelPosition(humanoidRootPart.Position)
-    if fuelFive then
-        print("[Step 5] Moving to fifth closest fuel.")
-        adaptiveCrawlTo(fuelFive:GetPivot().Position, humanoidRootPart, character)
-        task.wait(0.3)
-        FuelTeleport(humanoidRootPart, fuelFive)
-        task.wait(0.5)
-    end
  
-    -- STEP 6: OPTIMIZED POWER BOX QUERY & TRACKING (ZIP STRAIGHT TO POWER PLANT)
-    print("[Step 6] Scanning for closest Power Box model...")
+    -- STEP 3: OPTIMIZED POWER BOX QUERY & TRACKING (ZIP STRAIGHT TO POWER PLANT)
+    print("[Step 3] Scanning for closest Power Box model...")
     local powerBoxData = {}
     local interactionSuccess = false
  
@@ -367,7 +337,7 @@ local function runPipeline()
         local chosenBox = powerBoxData[1].Instance
         local finalBoxTarget = powerBoxData[1].Position
  
-        print("[Step 6] Crawling directly to closest Power Box.")
+        print("[Step 3] Crawling directly to closest Power Box.")
         adaptiveCrawlTo(finalBoxTarget, humanoidRootPart, character)
         task.wait(0.5)
  
@@ -414,7 +384,7 @@ if #Players:GetPlayers() > 1 then
 end
  
 Players.PlayerAdded:Connect(function(newPlayer)
-    if newPlayer ~= LocalPlayer me
+    if newPlayer ~= LocalPlayer then
         evacuateServer("Player entry detected (" .. newPlayer.Name .. "). Executing immediate escape.")
     end
 end)
