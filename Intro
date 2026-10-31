@@ -1,38 +1,47 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
 -- Updated: Target specifically the 2nd furthest Power Box sorted by Generator distance.
+-- Added: Anti-Stuck (auto reset game when rubber-banded / no progress)
 
 print("Loading")
 print("[ UPDATE ] Configured to target the 2nd furthest Power Box based on Generator distance")
+print("[ UPDATE ] Anti-Stuck enabled: auto reset when stuck / rubber-banded")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
- 
+
 local ContentProvider = game:GetService("ContentProvider")
 while ContentProvider.RequestQueueSize > 0 do
     task.wait(0.5)
 end
- 
+
 print("The game is loaded in. Wait more for things to fully load")
 task.wait(6.0)
 print("Complete! Starting the farm.")
- 
+
 -- SERVICES --
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
- 
+
 -- --- CONFIGURATION & REFERENCES ---
 local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
 local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
 local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
- 
+
 local cachedGeneratorLocation = nil
 local PermanentNoclipEnabled = true
- 
+
+-- --- ANTI-STUCK SETTINGS (ปรับค่าตรงนี้ได้) ---
+local SNAP_DISTANCE = 4        -- ถูกดึงห่างจากตำแหน่งที่เราตั้งไว้เกินกี่ studs = นับว่าโดนเด้งกลับ 1 ครั้ง
+local SNAP_LIMIT = 8           -- เด้งกลับกี่ครั้ง ถึงจะถือว่าบัค
+local SNAP_WINDOW = 3          -- นับเฉพาะครั้งที่เกิดภายในกี่วินาทีล่าสุด
+local NO_PROGRESS_TIME = 8     -- ไม่เข้าใกล้เป้าหมายเลยกี่วินาที ถึงจะถือว่าติด
+local PROGRESS_MIN_GAIN = 1    -- ต้องเข้าใกล้เป้าหมายเพิ่มอย่างน้อยกี่ studs ถึงนับว่า "คืบหน้า"
+
 -- --- NOCLIP ENGINE ---
 local function StartPermanentNoclip()
     local noclipConnection = nil
@@ -61,7 +70,7 @@ local function StartPermanentNoclip()
     end)
 end
 StartPermanentNoclip()
- 
+
 -- Get Generator Position
 local function getGeneratorPosition()
     if cachedGeneratorLocation then return cachedGeneratorLocation end
@@ -80,7 +89,7 @@ local function getGeneratorPosition()
     end
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
- 
+
 -- Find Fuel (ระบบผสม: อิง Generator เป็นหลัก แต่ถ้าระยะจากตัวละครใกล้มาก จะเลือกชิ้นใกล้ตัวก่อน)
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
@@ -96,12 +105,12 @@ local function getBestFuelPosition(genPos, currentPos)
                     local fuelPos = item:GetPivot().Position
                     local distFromGen = (genPos - fuelPos).Magnitude
                     local distFromPlayer = (currentPos - fuelPos).Magnitude
-                    
+
                     local score = distFromGen
                     if distFromPlayer < 12 then
                         score = distFromPlayer * 0.5
                     end
-                    
+
                     if score < bestScore then
                         bestScore = score
                         bestTarget = item
@@ -118,7 +127,7 @@ local function getBestFuelPosition(genPos, currentPos)
     end
     return foundValidFuel
 end
- 
+
 local function FuelTeleport(hrp, targetFuel)
     local generatorLoc = getGeneratorPosition()
     if not hrp or not targetFuel or not generatorLoc then return end
@@ -132,30 +141,83 @@ local function FuelTeleport(hrp, targetFuel)
         task.wait(0.15)
     end
 end
- 
--- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30)
+
+-- --- ANTI-STUCK: รีเกมเมื่อติดบัค ---
+local hasReset = false
+local function triggerReset(reason)
+    if hasReset then return end -- กันไม่ให้ทำซ้ำหลายรอบ
+    hasReset = true
+    warn("[Anti-Stuck] " .. reason .. " -> รีเกม")
+
+    -- 1) โหวตเล่นใหม่
+    if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+        pcall(function() PlayAgainRemote:FireServer() end)
+    end
+
+    -- 2) สำรอง: ฆ่าตัวละครเพื่อรีเกิด เผื่อโหวตไม่ติด
+    task.delay(3, function()
+        local hum = character and character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.Health = 0 end
+    end)
+end
+
+-- SMART TRAVEL COMPONENT (คำนวณเส้นทางหลบสิ่งกีดขวาง + ความเร็ว 30 + ตรวจจับบัค)
+-- คืนค่า true = ถึงเป้าหมาย / false = ติดบัคและสั่งรีเกมแล้ว
 local function smartCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    
+
     local NORMAL_SPEED = 30
     local SLOW_SPEED = 7
     local CLEARANCE_COOLDOWN = 0.4
     local lastWallDetectedTime = 0
-    
+
     local lockedYHeight = humanoidRootPart.Position.Y
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.FilterDescendantsInstances = {character}
-    
+
     local heartbeatEvent = RunService.Heartbeat
- 
+
+    -- ตัวแปรตรวจจับบัค
+    local lastSetPos = nil                 -- ตำแหน่งล่าสุดที่สคริปต์ตั้งให้ตัวละคร
+    local snapTimes = {}                   -- เวลาที่โดนเด้งกลับแต่ละครั้ง
+    local bestDistance = math.huge         -- ระยะใกล้เป้าหมายที่สุดที่เคยทำได้
+    local lastProgressTime = os.clock()    -- เวลาล่าสุดที่เข้าใกล้เป้าหมายได้
+
     while true do
         if not humanoidRootPart or not humanoidRootPart.Parent then break end
         local deltaTime = heartbeatEvent:Wait()
         local currentPos = humanoidRootPart.Position
+
+        -- [ตรวจจับ 1] โดนดึงกลับรัวๆ
+        -- ถ้าตำแหน่งจริงห่างจากที่เราเพิ่งตั้งไว้ในเฟรมก่อนมาก = เซิร์ฟเวอร์ดึงเรากลับ
+        if lastSetPos and (currentPos - lastSetPos).Magnitude > SNAP_DISTANCE then
+            local now = os.clock()
+            table.insert(snapTimes, now)
+            for i = #snapTimes, 1, -1 do
+                if now - snapTimes[i] > SNAP_WINDOW then
+                    table.remove(snapTimes, i)
+                end
+            end
+            if #snapTimes >= SNAP_LIMIT then
+                triggerReset("โดนดึงกลับรัวๆ")
+                return false
+            end
+        end
+
         local remainingVector = Vector3.new(finalTarget.X, lockedYHeight, finalTarget.Z) - currentPos
         local totalDistance = remainingVector.Magnitude
- 
+
+        -- [ตรวจจับ 2] เดินแล้วไม่คืบหน้า
+        -- ถ้านานเกิน NO_PROGRESS_TIME แล้วยังไม่เข้าใกล้เป้าหมายกว่าเดิม = ติด
+        if totalDistance < bestDistance - PROGRESS_MIN_GAIN then
+            bestDistance = totalDistance
+            lastProgressTime = os.clock()
+        elseif os.clock() - lastProgressTime > NO_PROGRESS_TIME then
+            triggerReset("ไม่คืบหน้านานเกินไป")
+            return false
+        end
+
         if totalDistance <= 2.0 then
             humanoidRootPart.CFrame = CFrame.new(finalTarget)
             humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, -5, 0)
@@ -163,15 +225,15 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
             humanoidRootPart.Anchored = true
             task.wait(0.05)
             humanoidRootPart.Anchored = false
-            break
+            return true
         end
- 
+
         local direction = remainingVector.Unit
-        
+
         local primaryRay = workspace:Raycast(currentPos, direction * 6, raycastParams)
         local leftRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(-30), 0) * direction) * 5, raycastParams)
         local rightRay = workspace:Raycast(currentPos, (CFrame.Angles(0, math.rad(30), 0) * direction) * 5, raycastParams)
-        
+
         if primaryRay and primaryRay.Instance and primaryRay.Instance.CanCollide then
             lastWallDetectedTime = os.clock()
             if leftRay and not (leftRay.Instance and leftRay.Instance.CanCollide) then
@@ -180,36 +242,41 @@ local function smartCrawlTo(targetPos, humanoidRootPart, character)
                 direction = (CFrame.Angles(0, math.rad(45), 0) * direction).Unit
             end
         end
- 
+
         local currentAllowedSpeed = NORMAL_SPEED
         if os.clock() - lastWallDetectedTime < CLEARANCE_COOLDOWN then
             currentAllowedSpeed = SLOW_SPEED
         end
- 
+
         local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
-        humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
+        local newPos = Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z)
+        humanoidRootPart.CFrame = CFrame.new(newPos)
+        lastSetPos = newPos -- จำตำแหน่งที่เราเพิ่งตั้ง ไว้เทียบในเฟรมถัดไป
     end
+
+    return false
 end
- 
+
 -- --- PIPELINE EXECUTION ENGINE ---
 local function runPipeline()
     print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
     local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
- 
+
     print("[Pipeline] Initiating Complete Sequence...")
     task.wait(0.3)
- 
+
     local genPos = getGeneratorPosition()
- 
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
+
+    -- STEP 1: วนลูปเก็บ Fuel (ตอนนี้ตั้งไว้ 2 ชิ้น แก้เลข 2 ได้ตามต้องการ)
     local collectedCount = 0
     while collectedCount < 2 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
             collectedCount = collectedCount + 1
             print("[Step] Moving to fuel #" .. collectedCount)
-            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
+            local ok = smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
+            if not ok then return end -- ติดบัค รีเกมแล้ว หยุด pipeline
             task.wait(0.3)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
@@ -223,13 +290,13 @@ local function runPipeline()
             break
         end
     end
- 
+
     print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Scanning for Power Boxes...")
 
     -- STEP 2: Scan and Target the 2nd Furthest Power Box (ไกลเป็นลำดับที่ 2 จาก Generator)
     local powerBoxData = {}
     local boxOpenedSuccessfully = false
- 
+
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         local tiles = MapFolder.Tiles:GetChildren()
         for i = 1, #tiles do
@@ -245,23 +312,23 @@ local function runPipeline()
             end
         end
     end
- 
+
     if #powerBoxData > 0 then
         -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
- 
-        -- เลือก Power Box ตัวที่ไกลเป็นลำดับที่ 2 (ถ้ามีหลายตัว ให้เอาตัวรองสุดท้าย หรือตัวที่ 2 ถ้านับจากตัวไกลสุด)
+
         local targetIndex = #powerBoxData >= 2 and 2 or 1
         local chosenBoxData = powerBoxData[targetIndex]
         local chosenBox = chosenBoxData.Instance
         local finalBoxTarget = chosenBoxData.Position
- 
+
         print("[Step] Targeting the 2nd furthest Power Box from Generator.")
-        smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
+        local ok = smartCrawlTo(finalBoxTarget, humanoidRootPart, character)
+        if not ok then return end -- ติดบัค รีเกมแล้ว หยุด pipeline
         task.wait(0.5)
- 
+
         if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
             local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
             if prompt then
@@ -284,9 +351,9 @@ local function runPipeline()
         humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
         task.wait(0.5)
     end
- 
+
     -- --- VOTE PLAY AGAIN SEQUENCE ---
-    task.wait(1.0) 
+    task.wait(1.0)
     if boxOpenedSuccessfully then
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
             pcall(function()
@@ -298,5 +365,5 @@ local function runPipeline()
         print("[Warning] Could not open the target power box. Skipping reset.")
     end
 end
- 
+
 runPipeline()
