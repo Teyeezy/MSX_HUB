@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Updated: Fuel finding logic purely based on the closest distance to the Player
+-- Updated: Fuel hybrid logic (Compares Distance from Player vs Generator and picks the closer one)
 
 print("Loading")
-print("[ UPDATE ] Configured to find fuel based purely on the closest distance to the Player")
+print("[ UPDATE ] Configured to pick the closer distance between Player and Generator for each fuel")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -81,13 +81,13 @@ local function getGeneratorPosition()
     return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
 end
 
--- Find Fuel (เลือกชิ้นที่ใกล้ตัวผู้เล่นที่สุดเป็นหลัก)
+-- Find Fuel (เทียบระหว่างระยะจากตัวเรา กับ ระยะจาก Generator อันไหนใกล้กว่าเลือกอันนั้น)
 local excludeFuel = {}
 local function getBestFuelPosition(genPos, currentPos)
     local foundValidFuel = nil
     while not foundValidFuel do
         local bestTarget = nil
-        local shortestDist = math.huge
+        local bestDistance = math.huge
         
         if DroppedItemsFolder then
             local items = DroppedItemsFolder:GetChildren()
@@ -95,11 +95,14 @@ local function getBestFuelPosition(genPos, currentPos)
                 local item = items[i]
                 if item.Name == "Fuel" and not excludeFuel[item] then
                     local fuelPos = item:GetPivot().Position
+                    local distFromGen = (genPos - fuelPos).Magnitude
                     local distFromPlayer = (currentPos - fuelPos).Magnitude
                     
-                    -- เลือกชิ้นที่อยู่ใกล้ตัวเราที่สุด
-                    if distFromPlayer < shortestDist then
-                        shortestDist = distFromPlayer
+                    -- เช็คว่าระยะจากตัวเรา หรือ Generator อันไหนใกล้กว่ากัน
+                    local shortestDistForThisFuel = math.min(distFromPlayer, distFromGen)
+                    
+                    if shortestDistForThisFuel < bestDistance then
+                        bestDistance = shortestDistForThisFuel
                         bestTarget = item
                     end
                 end
@@ -203,7 +206,6 @@ local function runPipeline()
     -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น
     local collectedCount = 0
     while collectedCount < 7 do
-        -- ส่งตำแหน่งปัจจุบันของตัวละครไปให้ฟังก์ชันหา Fuel ที่ใกล้ตัวที่สุด
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
             collectedCount = collectedCount + 1
@@ -287,3 +289,12 @@ local function runPipeline()
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
             pcall(function()
                 PlayAgainRemote:FireServer()
+            end)
+            print("[Play Again] Task completed successfully. Resetting game.")
+        end
+    else
+        print("[Warning] Could not open the farther power box. Skipping reset.")
+    end
+end
+
+runPipeline()
