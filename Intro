@@ -1,5 +1,5 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Modified to loop 7 fuels and open 2 Power Boxes sequentially
+-- Modified to loop 7 fuels and open 2 Power Boxes sequentially before resetting
 
 print("Loading")
 print("[ UPDATE ] Changed the movement function so it's burst speed so it should be faster than original one")
@@ -190,30 +190,30 @@ local function runPipeline()
     print("[Pipeline] Initiating Complete Sequence...")
     task.wait(0.3)
  
-    -- STEP 1: Loop 7 Fuels (ปรับเปลี่ยนจาก 5 เป็น 7 ชิ้น)
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 7 ชิ้น หรือหมดแมป
     local collectedCount = 0
-    for i = 1, 7 do
+    while collectedCount < 7 do
         local fuel = getClosestFuelPosition(humanoidRootPart.Position)
         if fuel then
-            print("[Step " .. i .. "] Moving to fuel #" .. i)
+            collectedCount = collectedCount + 1
+            print("[Step] Moving to fuel #" .. collectedCount)
             adaptiveCrawlTo(fuel:GetPivot().Position, humanoidRootPart, character)
             task.wait(0.3)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-            collectedCount = collectedCount + 1
             task.wait(0.5)
         else
-            print("[Warning] Fuel not found for step " .. i .. ", skipping...")
-            task.wait(0.5)
+            print("[Pipeline] No more fuels found on map. Moving to Power Boxes...")
+            break
         end
     end
  
-    print("[Pipeline] Collected " .. collectedCount .. " fuels. Moving to Power Boxes...")
+    print("[Pipeline] Total collected: " .. collectedCount .. " fuels. Moving to Power Boxes...")
 
     -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially
     print("[Step] Scanning for Power Box models...")
     local powerBoxData = {}
-    local interactionSuccess = false
+    local anyBoxOpened = false
  
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
@@ -235,6 +235,7 @@ local function runPipeline()
             return (currentPos - a.Position).Magnitude < (currentPos - b.Position).Magnitude
         end)
  
+        -- วนลูปเปิด Power Box ให้ครบ 2 อันตามลำดับ
         for boxIndex = 1, math.min(2, #powerBoxData) do
             local chosenBox = powerBoxData[boxIndex].Instance
             local finalBoxTarget = powerBoxData[boxIndex].Position
@@ -257,20 +258,21 @@ local function runPipeline()
                         task.wait(0.1)
                     end
                     print("[Pipeline] Power Box #" .. boxIndex .. " interaction forced!")
-                    interactionSuccess = true
+                    anyBoxOpened = true
                 end
             end
+            task.wait(0.5)
         end
     end
  
     -- --- VOTE PLAY AGAIN SEQUENCE ---
-    task.wait(0.5) 
-    if interactionSuccess then
+    task.wait(1.0) 
+    if anyBoxOpened then
         if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
             pcall(function()
                 PlayAgainRemote:FireServer()
             end)
-            print("[Play Again] Sequence executed successfully.")
+            print("[Play Again] All steps completed. Sequence executed successfully.")
         end
     end
 end
