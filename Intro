@@ -1,7 +1,6 @@
--- === STANDALONE BLACK SCREEN & STATS GUI (Fixed 999 Bug) ===
+-- === STANDALONE BLACK SCREEN & STATS GUI (Block 999 Fixed) ===
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -39,7 +38,7 @@ if not _G.BotStatus then
     _G.BotStatus = "ระบบ GUI พร้อมใช้งาน"
 end
 
--- 4. ระบบอัปเดตหน้าจอแบบเรียลไทม์ (ดึงค่า Emeralds ตัวจริง หลบเลข 999)
+-- 4. ระบบอัปเดตหน้าจอแบบเรียลไทม์ (กรองเลข 999 ทิ้งทันที)
 local startTime = os.clock()
 task.spawn(function()
     while true do
@@ -49,30 +48,24 @@ task.spawn(function()
         local seconds = elapsedSeconds % 60
         local timeString = string.format("%02d:%02d", minutes, seconds)
         
-        -- ดึงค่า Emeralds จาก UI ของเกมโดยกรองค่าที่ไม่ใช่ 999
+        -- ค้นหาค่า Emeralds พร้อมระบบบล็อกเลข 999
         local emeralds = "0"
         pcall(function()
-            -- เช็คจากโครงสร้าง Main -> BloodGemDisplay -> Count (หรือชื่อสกุลเงินจริง)
-            local main = PlayerGui:FindFirstChild("Main")
-            if main then
-                local display = main:FindFirstChild("BloodGemDisplay") or main:FindFirstChild("EmeraldsDisplay") or main:FindFirstChild("Currency")
-                if display then
-                    local count = display:FindFirstChild("Count") or display:FindFirstChild("TextLabel")
-                    if count and count:IsA("TextLabel") then
-                        if count.Text ~= "999" then
-                            emeralds = count.Text
-                        end
-                    end
-                end
-            end
-            
-            -- ถ้ายัังไม่ได้ ให้หา TextLabel ที่ไม่ใช่เลข 999
-            if emeralds == "0" then
-                for _, desc in ipairs(PlayerGui:GetDescendants()) do
-                    if desc:IsA("TextLabel") and (desc.Name == "Count" or desc.Name:lower():find("gem") or desc.Name:lower():find("emerald")) then
-                        if desc.Text ~= "" and desc.Text ~= "999" and desc.Text ~= "0" then
-                            emeralds = desc.Text
-                            break
+            for _, desc in ipairs(PlayerGui:GetDescendants()) do
+                if desc:IsA("TextLabel") then
+                    local textVal = desc.Text
+                    -- เช็คว่าไม่ใช่ค่าว่าง, ไม่ใช่เลข 999 และชื่อหรือ Parent มีคำว่า emerald หรือ gem
+                    if textVal ~= "" and textVal ~= "999" then
+                        local nameLower = desc.Name:lower()
+                        local parentName = desc.Parent and desc.Parent.Name:lower() or ""
+                        
+                        if nameLower:find("emerald") or nameLower:find("gem") or parentName:find("emerald") or parentName:find("gem") then
+                            -- เช็คเพิ่มเติมว่าข้างในน่าจะเป็นตัวเลขเงินจริงๆ (เช่น แปลงเป็นตัวเลขได้และไม่เกินค่าแปลกๆ)
+                            local num = tonumber(textVal)
+                            if num and num ~= 999 then
+                                emeralds = textVal
+                                break
+                            end
                         end
                     end
                 end
