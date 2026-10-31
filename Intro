@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Final Stable Version: Constant speed 30, up to 8 fuels, 2 sequential power boxes, safe final reset.
+-- Final Version: Original burst/slow speed system, Generator reference, 8 fuels, 2 sequential power boxes, safe final reset.
 
 print("Loading")
-print("[ UPDATE ] Script initialized with constant speed 30 and safe completion checks")
+print("[ UPDATE ] Restored original burst/slow speed movement system")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -89,7 +89,9 @@ local function getClosestFuelPositionFromGen(genPos)
         local bestTarget = nil
         local shortestDistance = math.huge
         if DroppedItemsFolder then
-            for _, item in ipairs(DroppedItemsFolder:GetChildren()) do
+            local items = DroppedItemsFolder:GetChildren()
+            for i = 1, #items do
+                local item = items[i]
                 if item.Name == "Fuel" and not excludeFuel[item] then
                     local fuelPos = item:GetPivot().Position
                     local dist = (genPos - fuelPos).Magnitude
@@ -124,11 +126,16 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
  
--- TRAVEL COMPONENT (ล็อกความเร็วคงที่ที่ 30 ตลอดทาง)
+-- TRAVEL COMPONENT (ระบบความเร็วแบบต้นฉบับ: Burst Speed สลับ Slow Speed เมื่อชนกำแพง/สิ่งกีดขวาง)
 local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    local CONSTANT_SPEED = 30
+    local BURST_SPEED, SLOW_SPEED = 75, 7
+    local CLEARANCE_COOLDOWN, SLOW_ZONE_DURATION = 0.5, 0.35
+    local lastWallDetectedTime = 0
     local lockedYHeight = humanoidRootPart.Position.Y
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {character}
     local heartbeatEvent = RunService.Heartbeat
  
     while true do
@@ -149,7 +156,18 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
         end
  
         local direction = remainingVector.Unit
-        local frameTravelDistance = math.min(CONSTANT_SPEED * deltaTime, totalDistance)
+        if workspace:Raycast(currentPos, direction * 5, raycastParams) then
+            lastWallDetectedTime = os.clock()
+        end
+ 
+        local currentAllowedSpeed = SLOW_SPEED
+        if os.clock() - lastWallDetectedTime >= CLEARANCE_COOLDOWN then
+            if (workspace:GetServerTimeNow() % 1.0) < (1.0 - SLOW_ZONE_DURATION) then
+                currentAllowedSpeed = BURST_SPEED
+            end
+        end
+ 
+        local frameTravelDistance = math.min(currentAllowedSpeed * deltaTime, totalDistance)
         local nextPosition = currentPos + (direction * frameTravelDistance)
         humanoidRootPart.CFrame = CFrame.new(Vector3.new(nextPosition.X, lockedYHeight, nextPosition.Z))
     end
@@ -191,7 +209,9 @@ local function runPipeline()
     local openedBoxesCount = 0
  
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
-        for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
+        local tiles = MapFolder.Tiles:GetChildren()
+        for i = 1, #tiles do
+            local child = tiles[i]
             if child.Name == "Power Plant" then
                 local powerBox = child:FindFirstChild("Power Box")
                 if powerBox and powerBox:IsA("Model") then
