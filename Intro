@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Modified to use a constant speed of 30, 8 fuels, and 2 sequential power boxes
+-- Fixed: Removed premature reset timers, locked speed to 30, loops up to 8 fuels, and resets ONLY after 2 power boxes are done.
 
 print("Loading")
-print("[ UPDATE ] Speed locked to constant 30")
+print("[ UPDATE ] Fixed early resetting bug and locked speed to 30")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -32,19 +32,6 @@ local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
  
 local cachedGeneratorLocation = nil
 local PermanentNoclipEnabled = true
- 
--- --- Safety First ---
-local function evacuateServer(reason)
-    warn("[CRITICAL EVACUATION]: " .. reason)
-    task.spawn(function()
-        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
-            pcall(function() PlayAgainRemote:FireServer() end)
-            task.wait(1.0)
-        end
-        LocalPlayer:Kick("[WARNING] UNKNOWN PLAYER DETECTED!")
-    end)
-    error("Script execution terminated.")
-end
  
 -- --- NOCLIP ENGINE ---
 local function StartPermanentNoclip()
@@ -140,7 +127,7 @@ end
 -- TRAVEL COMPONENT (ล็อกความเร็วคงที่ที่ 30 ตลอดทาง)
 local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    local CONSTANT_SPEED = 30 -- ล็อกความเร็วไว้ที่ 30
+    local CONSTANT_SPEED = 30
     local lockedYHeight = humanoidRootPart.Position.Y
     local heartbeatEvent = RunService.Heartbeat
  
@@ -178,7 +165,7 @@ local function runPipeline()
  
     local genPos = getGeneratorPosition()
  
-    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น
+    -- STEP 1: วนลูปเก็บ Fuel จนกว่าจะครบ 8 ชิ้น (หรือถ้าหมดแมปจริงๆ ถึงจะยอมข้ามไปขั้นต่อไป)
     local collectedCount = 0
     while collectedCount < 8 do
         local fuel = getClosestFuelPositionFromGen(genPos)
@@ -191,7 +178,7 @@ local function runPipeline()
             excludeFuel[fuel] = true
             task.wait(0.5)
         else
-            print("[Pipeline] No more fuels found on map. Moving to Power Boxes...")
+            print("[Pipeline] No more fuels found on map. Proceeding with " .. collectedCount .. " fuels...")
             break
         end
     end
@@ -201,7 +188,7 @@ local function runPipeline()
     -- STEP 2: Scan and Open Top 2 Power Boxes Sequentially
     print("[Step] Scanning for Power Box models...")
     local powerBoxData = {}
-    local anyBoxOpened = false
+    local openedBoxesCount = 0
  
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
@@ -222,7 +209,7 @@ local function runPipeline()
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
  
-        -- วนลูปเปิด Power Box ให้ครบ 2 อันตามลำดับ
+        -- วนลูปเปิด Power Box ให้ครบ 2 อันตามลำดับแบบเป๊ะๆ
         for boxIndex = 1, math.min(2, #powerBoxData) do
             local chosenBox = powerBoxData[boxIndex].Instance
             local finalBoxTarget = powerBoxData[boxIndex].Position
@@ -230,3 +217,45 @@ local function runPipeline()
             print("[Step] Moving to Power Box #" .. boxIndex)
             adaptiveCrawlTo(finalBoxTarget, humanoidRootPart, character)
             task.wait(0.5)
+ 
+            if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
+                local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt then
+                    for i = 1, 3 do
+                        if fireproximityprompt then
+                            fireproximityprompt(prompt)
+                        else
+                            prompt:InputHoldBegin()
+                            task.wait(prompt.HoldDuration + 0.05)
+                            prompt:InputHoldEnd()
+                        end
+                        task.wait(0.1)
+                    end
+                    print("[Pipeline] Power Box #" .. boxIndex .. " interaction forced!")
+                    openedBoxesCount = openedBoxesCount + 1
+                end
+            end
+
+            -- ดึงตัวละครลงพื้นหลังเปิดกล่องเสร็จ
+            local pos = humanoidRootPart.Position
+            humanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+            
+            task.wait(0.5)
+        end
+    end
+ 
+    -- --- VOTE PLAY AGAIN SEQUENCE (สั่งรีเซ็ตต่อเมื่อเปิด Power Box ครบ 2 อันจริง ๆ เท่านั้น) ---
+    task.wait(1.0) 
+    if openedBoxesCount >= 2 then
+        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+            pcall(function()
+                PlayAgainRemote:FireServer()
+            end)
+            print("[Play Again] All tasks completed successfully. Resetting game.")
+        end
+    else
+        print("[Warning] Could not open 2 power boxes. Skipping reset to prevent premature exit.")
+    end
+end
+ 
+runPipeline()
