@@ -1,8 +1,8 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Added drop-to-ground logic after each individual fuel collection to prevent floating/dashing.
+-- Fixed Power Box drop bug by resetting to safe ground height instead of arbitrary subtraction.
 
 print("Loading")
-print("[ UPDATE ] Added ground stabilization after every single fuel collection")
+print("[ UPDATE ] Fixed Power Box ground drop height bug to prevent glitches")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -199,9 +199,9 @@ local function runPipeline()
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
 
-            -- [จุดที่เพิ่ม]: ดึงตัวละครลงพื้นทันทีหลังเก็บ Fuel แต่ละชิ้นเสร็จ
+            -- ดึงตัวละครลงพื้นหลังเก็บ Fuel แต่ละชิ้น (ใช้ระดับความสูง Y ของ Generator เป็นฐานปลอดภัย)
             local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+            humanoidRootPart.CFrame = CFrame.new(pos.X, genPos.Y + 1, pos.Z)
 
             task.wait(0.5)
         else
@@ -265,9 +265,9 @@ local function runPipeline()
                 end
             end
 
-            -- ดึงตัวละครลงพื้นหลังเปิดกล่องเสร็จ
-            local pos = humanoidRootPart.Position
-            humanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+            -- [จุดที่แก้]: หลังเปิดกล่องเสร็จ ดึงตัวละครลงมาที่ระดับความสูงปลอดภัย (อ้างอิงความสูงจาก Generator) ไม่ให้ลอยค้าง
+            local boxPos = finalBoxTarget
+            humanoidRootPart.CFrame = CFrame.new(boxPos.X, genPos.Y + 1, boxPos.Z)
             
             task.wait(0.5)
         end
