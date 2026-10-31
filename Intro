@@ -1,5 +1,5 @@
 -- Made by TheAnonymous in RScript / Theultimateuser in Scriptblox
--- Modified to loop 7 fuels and open 2 Power Boxes sequentially before resetting
+-- Modified to loop 7 fuels, open 2 Power Boxes sequentially, and drop to ground between boxes
 
 print("Loading")
 print("[ UPDATE ] Changed the movement function so it's burst speed so it should be faster than original one")
@@ -261,6 +261,12 @@ local function runPipeline()
                     anyBoxOpened = true
                 end
             end
+
+            -- [จุดที่แก้]: หลังจากเปิดกล่องเสร็จ ให้ดึงตัวละครลงมาติดพื้น (ลดความสูง Y ลง 3 หน่วย) 
+            -- เพื่อไม่ให้ตัวละครลอยค้างตอนวิ่งไปเปิดกล่องที่ 2
+            local pos = humanoidRootPart.Position
+            humanoidRootPart.CFrame = CFrame.new(pos.X, pos.Y - 3, pos.Z)
+            
             task.wait(0.5)
         end
     end
