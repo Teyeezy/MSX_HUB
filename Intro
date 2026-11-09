@@ -1,5 +1,5 @@
--- Made by TheAnonymous & Optimized / Direct Teleport Bypass Edition by ไอ้ที ⚔️😈
-print("Loading IT_HUB Direct Teleport Ultra Speed...")
+-- Made by TheAnonymous & Optimized / Network-Sync Edition
+print("Loading IT_HUB Network-Synced Edition...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -14,7 +14,7 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
-local DroppedItemsFolder = Workspace:FindFirstChild("DroppedItems")
+local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
 local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
@@ -44,7 +44,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-titleLabel.Text = "🔥 MSX HUB | Ultra Teleport 🔥"
+titleLabel.Text = "🔥 MSX HUB | Stable Farm 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
@@ -157,24 +157,25 @@ local function FuelTeleport(hrp, targetFuel)
     local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
     if fuelUnion and networkRemote then
         pcall(function() networkRemote:FireServer(fuelUnion) end)
-        task.wait(0.05)
+        task.wait(0.15) -- เพิ่มเวลาเพื่อลดอาการเน็ตช้า
         pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) end)
-        task.wait(0.05)
+        task.wait(0.15)
     end
 end
 
--- DIRECT TELEPORT (พุ่งวาปถึงเป้าหมายทันทีแบบไร้รอยต่อ)
-local function directTeleportTo(targetPos, humanoidRootPart)
+-- SAFE TELEPORT (วาปปลอดภัย ยืนยันพิกัดกับเซิร์ฟเวอร์ก่อนทำงาน)
+local function safeTeleportTo(targetPos, humanoidRootPart)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
     humanoidRootPart.CFrame = CFrame.new(finalTarget)
     humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    task.wait(0.1)
+    -- หน่วงเวลาเล็กน้อยเพื่อให้เซิร์ฟเวอร์อัปเดตตำแหน่งจริง ป้องกันอาการเปิดไม่ได้ของ
+    task.wait(0.25)
 end
 
 -- --- PIPELINE EXECUTION ENGINE ---
 local function runPipeline()
     local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-    task.wait(0.2)
+    task.wait(0.3)
     local genPos = getGeneratorPosition()
 
     updateStatus("⚡ Status: Teleporting & Collecting Fuel...")
@@ -186,11 +187,10 @@ local function runPipeline()
         if fuel then
             collectedCount = collectedCount + 1
             updateStatus("📦 Teleporting to Fuel #" .. collectedCount)
-            directTeleportTo(fuel:GetPivot().Position, humanoidRootPart)
-            task.wait(0.1)
+            safeTeleportTo(fuel:GetPivot().Position, humanoidRootPart)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-            task.wait(0.15)
+            task.wait(0.2)
         else
             break
         end
@@ -228,28 +228,29 @@ local function runPipeline()
             local finalBoxTarget = chosenBoxData.Position
 
             updateStatus("⚙️ Teleporting to Power Box #" .. idx)
-            directTeleportTo(finalBoxTarget, humanoidRootPart)
-            task.wait(0.2)
+            safeTeleportTo(finalBoxTarget, humanoidRootPart)
 
             local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
             if prompt then
-                updateStatus("🔓 Interacting with Box #" .. idx)
-                for i = 1, 3 do
+                updateStatus("🔓 Opening Power Box #" .. idx)
+                
+                -- ตรวจสอบระยะห่างก่อนส่งคำสั่ง
+                if (humanoidRootPart.Position - finalBoxTarget).Magnitude <= 20 then
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
                     else
                         prompt:InputHoldBegin()
-                        task.wait(prompt.HoldDuration + 0.02)
+                        task.wait(prompt.HoldDuration + 0.1)
                         prompt:InputHoldEnd()
                     end
-                    task.wait(0.1)
+                    task.wait(0.3) -- หน่วงเวลารอการประมวลผลจากเซิร์ฟเวอร์
                 end
             end
         end
     end
 
     updateStatus("✅ Task Completed! Resetting game...")
-    task.wait(0.3)
+    task.wait(0.5)
     
     if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
         pcall(function()
