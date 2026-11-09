@@ -1,5 +1,5 @@
--- Made by TheAnonymous & Optimized / UI Added by ไอ้ที ⚔️😈
-print("Loading IT_HUB Ultimate Farm UI...")
+-- Made by TheAnonymous & Optimized / Fully Patched by ไอ้ที ⚔️😈
+print("Loading IT_HUB Ultimate Farm Full Script...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -44,7 +44,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-titleLabel.Text = "🔥 MSX HUB | Farm Status 🔥"
+titleLabel.Text = "🔥 MSX HUB | Ultimate Farm 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
@@ -67,19 +67,22 @@ local function updateStatus(text)
     print("[IT_HUB] " .. text)
 end
 
--- --- NOCLIP ENGINE ---
+-- --- PRO NOCLIP ENGINE (Anti-Rubberband Fix) ---
 local function StartPermanentNoclip()
     RunService.Stepped:Connect(function()
         if not PermanentNoclipEnabled then return end
-        if character then
-            for _, child in ipairs(character:GetDescendants()) do
+        local char = LocalPlayer.Character
+        if char then
+            for _, child in ipairs(char:GetDescendants()) do
                 if child:IsA("BasePart") and child.CanCollide then
                     child.CanCollide = false
                 end
             end
-            local hrp = character:FindFirstChild("HumanoidRootPart")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
             if hrp then 
-                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y > 0 and hrp.AssemblyLinearVelocity.Y or 0, 0) 
+                -- ล้างค่าแรงเหวี่ยงไม่ให้เกมดึงกลับเวลาทะลุกำแพง
+                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y > 0 and hrp.AssemblyLinearVelocity.Y or 0, 0)
+                hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end
         end
     end)
@@ -161,10 +164,10 @@ local function FuelTeleport(hrp, targetFuel)
     end
 end
 
--- BYPASS SPEED / TELEPORT CHECK
+-- SMART TRAVEL (Bypass Speed & Rubberband Check)
 local function smartCrawlTo(targetPos, humanoidRootPart)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    local TRAVEL_SPEED = 24 
+    local TRAVEL_SPEED = 22 -- ใช้ความเร็วที่ปลอดภัยไม่ให้เซิร์ฟเวอร์เตะ
     local heartbeatEvent = RunService.Heartbeat
 
     while true do
@@ -214,7 +217,7 @@ local function runPipeline()
 
     updateStatus("🔌 Scanning Power Boxes (Targeting 2 Closest)...")
 
-    -- STEP 2: Scan and Target the 2 CLOSEST Power Boxes (เลือกตัวที่ใกล้ที่สุด 2 อันตามสั่ง)
+    -- STEP 2: Scan and Target the 2 CLOSEST Power Boxes
     local powerBoxData = {}
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         local tiles = MapFolder.Tiles:GetChildren()
@@ -233,12 +236,12 @@ local function runPipeline()
     end
 
     if #powerBoxData > 0 then
-        -- จัดเรียงจากใกล้ไปไกล Generator (เอาตัวที่ใกล้ที่สุดขึ้นก่อน)
+        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
 
-        -- วนลูปจัดการ Power Box 2 อันที่ใกล้ที่สุดตามที่มึงต้องการ
+        -- วนลูปจัดการ Power Box 2 อันที่ใกล้ที่สุดตามที่มึงสั่ง
         local targetLimit = math.min(2, #powerBoxData)
         for idx = 1, targetLimit do
             local chosenBoxData = powerBoxData[idx]
