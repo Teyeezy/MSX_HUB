@@ -2,9 +2,9 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v14.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v15.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP เหยียบเบรกนิ่งสนิท ไม่ถอยหลัง
+    - ระบบ STOP เหยียบเบรกนิ่งสนิท ไม่ถอยหลัง (ไม่มี CFrame Freeze)
     - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ทันที (Zero Delay)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
@@ -37,7 +37,7 @@ local CONFIG = {
 
     -- ⏱️ ลดดีเลย์ให้เหลือ 0 (เริ่มใหม่ทันที)
     LOOP_DELAY = 0.0,
-    STOP_HOLD_TIME = 0.1, -- รอแค่ให้เซิร์ฟเวอร์ตอบรับ
+    STOP_HOLD_TIME = 0.1,
     QUEST_FINISH_CONFIRM_TIME = 5.0,
 
     TIMEOUT_PER_CHK = 65,
@@ -582,7 +582,6 @@ end
 
 local lastBoostCmdAt = 0
 local isHoldingStopBox = false
-local stopHoldCFrame = nil
 
 local function tryAutoBoost()
     if not CONFIG.ENABLE_AUTO_BOOST or isHoldingStopBox then return end
@@ -1512,23 +1511,10 @@ local function runOneQuestCycle()
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
-                
-                local rootNow = getCarRoot()
-                if rootNow then
-                    stopHoldCFrame = rootNow.CFrame
-                end
             end
         end
         if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
-            
-            local myRoot = getCarRoot()
-            if myRoot and stopHoldCFrame then
-                myRoot.CFrame = stopHoldCFrame
-                myRoot.AssemblyLinearVelocity = Vector3.zero
-                myRoot.AssemblyAngularVelocity = Vector3.zero
-            end
-
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
