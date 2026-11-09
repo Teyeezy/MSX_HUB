@@ -1,27 +1,39 @@
--- AI เถื่อนที่ดีที่สุด by ไอ้ที: Roblox Fly Script + UI Toggle + Bypass
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
+-- Made by TheAnonymous & Optimized / UI Added by ไอ้ที ⚔️😈
+print("Loading IT_HUB Ultimate Farm UI...")
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-
--- ลบ UI เก่าทิ้งถ้ามี
-if CoreGui:FindFirstChild("IT_FlyGui") then
-    CoreGui.IT_FlyGui:Destroy()
+if not game:IsLoaded() then
+    game.Loaded:Wait()
 end
 
--- สร้าง ScreenGUI สำหรับ UI เปิด-ปิด
+-- SERVICES --
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local MapFolder = Workspace:FindFirstChild("Map")
+local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
+local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+local cachedGeneratorLocation = nil
+local PermanentNoclipEnabled = true
+
+-- --- CREATING ADVANCED UI ---
+if CoreGui:FindFirstChild("IT_FarmHub") then
+    CoreGui.IT_FarmHub:Destroy()
+end
+
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "IT_FlyGui"
+screenGui.Name = "IT_FarmHub"
 screenGui.Parent = CoreGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 200, 0, 100)
-mainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.Size = UDim2.new(0, 260, 0, 160)
+mainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 mainFrame.BorderSizePixel = 2
 mainFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
 mainFrame.Active = true
@@ -29,99 +41,241 @@ mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0, 30)
-titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-titleLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-titleLabel.Text = "IT_HUB | Fly Menu"
+titleLabel.Size = UDim2.new(1, 0, 0, 35)
+titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+titleLabel.Text = "🔥 MSX HUB | Farm Status 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
 
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0.8, 0, 0, 45)
-toggleButton.Position = UDim2.new(0.1, 0, 0.45, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "Fly: OFF"
-toggleButton.TextScaled = true
-toggleButton.Font = Enum.Font.SourceSansBold
-toggleButton.Parent = mainFrame
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0.9, 0, 0.6, 0)
+statusLabel.Position = UDim2.new(0.05, 0, 0.35, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.Text = "Status: Initializing..."
+statusLabel.TextSize = 14
+statusLabel.TextWrapped = true
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+statusLabel.Font = Enum.Font.Code
+statusLabel.Parent = mainFrame
 
--- ตัวแปรควบคุมการบิน
-local flying = false
-local flySpeed = 50
-local bv, bg
+local function updateStatus(text)
+    statusLabel.Text = text
+    print("[IT_HUB] " .. text)
+end
 
-local function startFly()
-    local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local hrp = char.HumanoidRootPart
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    bv = Instance.new("BodyVelocity")
-    bv.Name = "IT_FlyVelocity"
-    bv.Parent = hrp
-    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bv.Velocity = Vector3.new(0, 0, 0)
-
-    bg = Instance.new("BodyGyro")
-    bg.Name = "IT_FlyGyro"
-    bg.Parent = hrp
-    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    bg.CFrame = hrp.CFrame
-
-    hum.PlatformStand = true
-    flying = true
-
-    RunService.RenderStepped:Connect(function()
-        if not flying then return end
-        local camera = workspace.CurrentCamera
-        local moveDirection = Vector3.new()
-
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            moveDirection = moveDirection + camera.CFrame.LookVector
+-- --- NOCLIP ENGINE ---
+local function StartPermanentNoclip()
+    RunService.Stepped:Connect(function()
+        if not PermanentNoclipEnabled then return end
+        if character then
+            for _, child in ipairs(character:GetDescendants()) do
+                if child:IsA("BasePart") and child.CanCollide then
+                    child.CanCollide = false
+                end
+            end
+            local hrp = character:FindFirstChild("HumanoidRootPart")
+            if hrp then 
+                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y > 0 and hrp.AssemblyLinearVelocity.Y or 0, 0) 
+            end
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            moveDirection = moveDirection - camera.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            moveDirection = moveDirection - camera.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            moveDirection = moveDirection + camera.CFrame.RightVector
-        end
-
-        bv.Velocity = moveDirection * flySpeed
-        bg.CFrame = camera.CFrame
     end)
 end
+StartPermanentNoclip()
 
-local function stopFly()
-    flying = false
-    if bv then bv:Destroy() end
-    if bg then bg:Destroy() end
-    local char = player.Character
-    if char and char:FindFirstChildOfClass("Humanoid") then
-        char:FindFirstChildOfClass("Humanoid").PlatformStand = false
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    character = newChar
+end)
+
+-- Get Generator Position
+local function getGeneratorPosition()
+    if cachedGeneratorLocation then return cachedGeneratorLocation end
+    if MapFolder and MapFolder:FindFirstChild("Tiles") then
+        for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
+            if child.Name == "Generator" or child:FindFirstChild("Generator") then
+                cachedGeneratorLocation = child:GetPivot().Position
+                return cachedGeneratorLocation
+            end
+        end
+    end
+    local fallbackGen = Workspace:FindFirstChild("Generator", true)
+    if fallbackGen then
+        cachedGeneratorLocation = fallbackGen:GetPivot().Position
+        return cachedGeneratorLocation
+    end
+    return character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or Vector3.new(0,0,0)
+end
+
+-- Find Fuel
+local excludeFuel = {}
+local function getBestFuelPosition(genPos, currentPos)
+    local foundValidFuel = nil
+    while not foundValidFuel do
+        local bestTarget = nil
+        local bestScore = math.huge
+        if DroppedItemsFolder then
+            local items = DroppedItemsFolder:GetChildren()
+            for i = 1, #items do
+                local item = items[i]
+                if item.Name == "Fuel" and not excludeFuel[item] then
+                    local fuelPos = item:GetPivot().Position
+                    local distFromGen = (genPos - fuelPos).Magnitude
+                    local distFromPlayer = (currentPos - fuelPos).Magnitude
+                    
+                    local score = distFromGen
+                    if distFromPlayer < 15 then
+                        score = distFromPlayer * 0.4
+                    end
+                    
+                    if score < bestScore then
+                        bestScore = score
+                        bestTarget = item
+                    end
+                end
+            end
+        end
+        if not bestTarget then break end
+        if (bestTarget:GetPivot().Position.Y - genPos.Y) <= 20 then
+            foundValidFuel = bestTarget
+        else
+            excludeFuel[bestTarget] = true
+        end
+    end
+    return foundValidFuel
+end
+
+local function FuelTeleport(hrp, targetFuel)
+    local generatorLoc = getGeneratorPosition()
+    if not hrp or not targetFuel or not generatorLoc then return end
+    local fuelUnion = targetFuel:FindFirstChild("Union") or targetFuel.PrimaryPart
+    local itemDrag = targetFuel:FindFirstChild("ItemDrag")
+    local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
+    if fuelUnion and networkRemote then
+        pcall(function() networkRemote:FireServer(fuelUnion) end)
+        task.wait(0.1)
+        pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) end)
+        task.wait(0.1)
     end
 end
 
-toggleButton.MouseButton1Click:Connect(function()
-    if flying then
-        stopFly()
-        toggleButton.Text = "Fly: OFF"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-    else
-        startFly()
-        toggleButton.Text = "Fly: ON"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-    end
-end)
+-- BYPASS SPEED / TELEPORT CHECK
+local function smartCrawlTo(targetPos, humanoidRootPart)
+    local finalTarget = targetPos + Vector3.new(0, 3, 0)
+    local TRAVEL_SPEED = 24 
+    local heartbeatEvent = RunService.Heartbeat
 
--- ปุ่มลัดกด 'LeftControl' เพื่อซ่อน/แสดง UI
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
-        mainFrame.Visible = not mainFrame.Visible
+    while true do
+        if not humanoidRootPart or not humanoidRootPart.Parent then break end
+        local deltaTime = heartbeatEvent:Wait()
+        local currentPos = humanoidRootPart.Position
+        local remainingVector = finalTarget - currentPos
+        local totalDistance = remainingVector.Magnitude
+
+        if totalDistance <= 2.5 then
+            humanoidRootPart.CFrame = CFrame.new(finalTarget)
+            humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            break
+        end
+
+        local direction = remainingVector.Unit
+        local frameTravelDistance = math.min(TRAVEL_SPEED * deltaTime, totalDistance)
+        local nextPosition = currentPos + (direction * frameTravelDistance)
+        humanoidRootPart.CFrame = CFrame.new(nextPosition)
     end
-end)
+end
+
+-- --- PIPELINE EXECUTION ENGINE ---
+local function runPipeline()
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    task.wait(0.2)
+    local genPos = getGeneratorPosition()
+
+    updateStatus("⚡ Status: Scanning & Collecting Fuel...")
+
+    -- STEP 1: เก็บ Fuel 3 ชิ้น
+    local collectedCount = 0
+    while collectedCount < 3 do
+        local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
+        if fuel then
+            collectedCount = collectedCount + 1
+            updateStatus("📦 Collecting Fuel: #" .. collectedCount)
+            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart)
+            task.wait(0.2)
+            FuelTeleport(humanoidRootPart, fuel)
+            excludeFuel[fuel] = true
+            task.wait(0.3)
+        else
+            break
+        end
+    end
+
+    updateStatus("🔌 Scanning Power Boxes (Targeting 2 Closest)...")
+
+    -- STEP 2: Scan and Target the 2 CLOSEST Power Boxes (เลือกตัวที่ใกล้ที่สุด 2 อันตามสั่ง)
+    local powerBoxData = {}
+    if MapFolder and MapFolder:FindFirstChild("Tiles") then
+        local tiles = MapFolder.Tiles:GetChildren()
+        for i = 1, #tiles do
+            local child = tiles[i]
+            if child.Name == "Power Plant" then
+                local powerBox = child:FindFirstChild("Power Box")
+                if powerBox and powerBox:IsA("Model") then
+                    table.insert(powerBoxData, {
+                        Instance = powerBox,
+                        Position = powerBox:GetPivot().Position
+                    })
+                end
+            end
+        end
+    end
+
+    if #powerBoxData > 0 then
+        -- จัดเรียงจากใกล้ไปไกล Generator (เอาตัวที่ใกล้ที่สุดขึ้นก่อน)
+        table.sort(powerBoxData, function(a, b)
+            return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
+        end)
+
+        -- วนลูปจัดการ Power Box 2 อันที่ใกล้ที่สุดตามที่มึงต้องการ
+        local targetLimit = math.min(2, #powerBoxData)
+        for idx = 1, targetLimit do
+            local chosenBoxData = powerBoxData[idx]
+            local chosenBox = chosenBoxData.Instance
+            local finalBoxTarget = chosenBoxData.Position
+
+            updateStatus("⚙️ Moving to Power Box #" .. idx .. " (Closest)")
+            smartCrawlTo(finalBoxTarget, humanoidRootPart)
+            task.wait(0.4)
+
+            if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 18 then
+                local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt then
+                    updateStatus("🔓 Interacting with Power Box #" .. idx)
+                    for i = 1, 3 do
+                        if fireproximityprompt then
+                            fireproximityprompt(prompt)
+                        else
+                            prompt:InputHoldBegin()
+                            task.wait(prompt.HoldDuration + 0.05)
+                            prompt:InputHoldEnd()
+                        end
+                        task.wait(0.15)
+                    end
+                end
+            end
+        end
+    end
+
+    updateStatus("✅ Task Completed! Resetting game...")
+    task.wait(0.5)
+    
+    if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+        pcall(function()
+            PlayAgainRemote:FireServer()
+        end)
+    end
+end
+
+runPipeline()
