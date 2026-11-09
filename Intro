@@ -2,10 +2,10 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v9.0 FINAL)
-    - แก้ปัญหา UI ค้างหลังจบรอบ (เพิ่มระบบบังคับปิด UI)
+    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v10.0 ABSOLUTE)
     - ความเร็ว 99 m/s (356 km/h) เสถียร
-    - ระบบ STOP แบบดั้งเดิม (เบรกค้าง + v=zero) ไม่มี CFrame Freeze
+    - ระบบ STOP ล็อคเบรกและความเร็ว 100% ไม่ถอยหลังแม้แต่เซ็นติเมตร
+    - ระบบ Bypass หน้าต่างรับเควสแบบเงียบ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
     - ปุ่ม เปิด/ปิด การขายของ (ไม่มี UIGradient ไร้ Error 100%)
     ====================================================================
@@ -23,7 +23,7 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
-    -- ⚡ ความเร็ว 99 m/s (356 km/h) ตามที่ต้องการ
+    -- ⚡ ความเร็ว 99 m/s (356 km/h)
     CRUISE_SPEED_MPS = 99,
     CAP1_SPEED = 82.0,
     CAP2_SPEED = 56.0,
@@ -172,40 +172,6 @@ if CONFIG.ENABLE_ANTI_AFK then
                     VirtualUser:ClickButton2(Vector2.new(100, 100))
                 end)
             end
-        end
-    end)
-end
-
--- 🛑 ฟังก์ชันบังคับเคลียร์ UI ที่ค้าง (The UI Fixer)
-local function clearQuestUI()
-    pcall(function()
-        local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
-        if PlayerGui then
-            for _, gui in ipairs(PlayerGui:GetChildren()) do
-                if gui.Name:find("Quest") or gui.Name:find("Dialog") or gui.Name:find("Offer") or gui.Name:find("Mission") then
-                    if gui:IsA("ScreenGui") and gui.Name ~= "RaycityQuestGui" then
-                        gui.Enabled = false
-                        gui:Destroy()
-                    end
-                end
-            end
-        end
-        -- ปิด CoreGui ที่อาจจะค้าง (ถ้าเข้าถึงได้)
-        local CoreGuiObj = game:GetService("CoreGui")
-        for _, gui in ipairs(CoreGuiObj:GetChildren()) do
-            if gui.Name:find("Quest") or gui.Name:find("Dialog") then
-                pcall(function() gui:Destroy() end)
-            end
-        end
-        -- สั่งปิดผ่านฟังก์ชันของเกม (ถ้ามี)
-        local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
-        if rq and rq.talk then pcall(rq.talk, "") end 
-        local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
-        if QuestUI then
-            if QuestUI.offerShown and QuestUI.offerShown() then
-                pcall(function() QuestUI._offerAnswer(false) end)
-            end
-            if QuestUI.close then pcall(QuestUI.close) end
         end
     end)
 end
@@ -1290,7 +1256,7 @@ if MXPush then
     end)
 end
 
--- 🛑 ฟังก์ชันรับเควส (แก้ปัญหา UI ค้าง)
+-- 🛑 ฟังก์ชันรับเควส (Bypass หน้าต่างแบบไม่ค้าง)
 local function ensureQuestAccepted()
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
@@ -1340,12 +1306,8 @@ local function ensureQuestAccepted()
             carPos = getCarState()
             if not carPos then continue end
         end
-        
-        -- 🛑 บังคับเคลียร์ UI ที่ค้างก่อนเริ่มคุย!
-        clearQuestUI()
-        task.wait(0.1)
-
         startNpcPositionHold()
+        
         if QuestRequest then
             pcall(function()
                 QuestRequest:InvokeServer({ op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos })
@@ -1361,10 +1323,13 @@ local function ensureQuestAccepted()
         end
         local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
         if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
+        
+        -- บังคับตอบรับเควสทันทีถ้าหน้าต่างเด้ง
         local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
         if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
             pcall(function() QuestUI._offerAnswer(true) end)
         end
+        
         for waitStep = 1, CONFIG.ACCEPT_POLL_MAX do
             task.wait(CONFIG.ACCEPT_POLL_INTERVAL)
             st = getQuestState()
@@ -1380,6 +1345,10 @@ local function ensureQuestAccepted()
                         end)
                     end
                 end
+            end
+            -- เช็คซ้ำเผื่อหน้าต่างเด้งช้า
+            if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
+                pcall(function() QuestUI._offerAnswer(true) end)
             end
         end
         task.wait(0.2)
@@ -1710,7 +1679,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -20, 0, 28)
 Title.Position = UDim2.new(0, 10, 0, 10)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡ ไอ้ที AutoQuest v9.0"
+Title.Text = "⚡ ไอ้ที AutoQuest v10.0"
 Title.TextColor3 = Color3.fromRGB(255, 200, 200)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
@@ -1921,7 +1890,7 @@ local function startBot()
     end
     
     setButtonState(true)
-    print("[AutoQuest] >>> เริ่มบอท (v9.0 FINAL) <<<")
+    print("[AutoQuest] >>> เริ่มบอท (v10.0 ABSOLUTE) <<<")
     
     AutoDrive.canCruise = function() return true end
     
@@ -1975,4 +1944,4 @@ end
 
 setButtonState(false)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-print("[AutoQuest] GUI v9.0 FINAL พร้อม - ระบบ STOP ดั้งเดิม + แก้บั๊ก UI ค้างแล้ว!")
+print("[AutoQuest] GUI v10.0 ABSOLUTE พร้อม - ไร้การลบ UI, Bypass หน้าต่าง, และหยุดนิ่งสนิท 100%!")
