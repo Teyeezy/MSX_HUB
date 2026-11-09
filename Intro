@@ -1,5 +1,5 @@
--- Made by TheAnonymous & Optimized / Safe Speed & Anti-Lag Edition
-print("Loading IT_HUB Safe Speed Edition...")
+-- Made by TheAnonymous & Optimized / Sync-Grab Fix Edition by ไอ้ที ⚔️😈
+print("Loading IT_HUB Sync-Grab Edition...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -45,7 +45,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-titleLabel.Text = "🔥 MSX HUB | Safe Speed 🔥"
+titleLabel.Text = "🔥 MSX HUB | Sync-Grab Fix 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
@@ -150,27 +150,31 @@ local function getBestFuelPosition(genPos, currentPos)
     return foundValidFuel
 end
 
+-- แก้ไขระบบดึง Fuel ให้หน่วงเวลาและส่งคำสั่งย้ายพิกัดให้ชัวร์ขึ้น
 local function FuelTeleport(hrp, targetFuel)
     local generatorLoc = getGeneratorPosition()
     if not hrp or not targetFuel or not generatorLoc then return end
+    
     local fuelUnion = targetFuel:FindFirstChild("Union") or targetFuel.PrimaryPart
     local itemDrag = targetFuel:FindFirstChild("ItemDrag")
     local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
+    
     if fuelUnion and networkRemote then
         pcall(function() networkRemote:FireServer(fuelUnion) end)
-        task.wait(0.2)
-        pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) end)
-        task.wait(0.2)
+        task.wait(0.2) -- รอรับสิทธิ์ Network Ownership
+        pcall(function() 
+            targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) 
+        end)
+        task.wait(0.3) -- รอให้เซิร์ฟเวอร์ยืนยันการย้ายไอเทมลง Generator
     end
 end
 
--- SAFE TWEEN MOVEMENT (ลดความเร็วเหลือ 14 ป้องกันการโดนดึง 100%)
+-- SAFE TWEEN MOVEMENT
 local function safeTweenMoveTo(targetPos, humanoidRootPart)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
     local distance = (finalTarget - humanoidRootPart.Position).Magnitude
     
-    -- ปรับความเร็วลงมาที่ 14 (ระดับปลอดภัยเท่าเดินปกติ)
-    local SAFE_SPEED = 14
+    local SAFE_SPEED = 16
     local tweenTime = math.max(0.2, distance / SAFE_SPEED)
 
     local tweenInfo = TweenInfo.new(
@@ -184,7 +188,7 @@ local function safeTweenMoveTo(targetPos, humanoidRootPart)
     tween.Completed:Wait()
     
     humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    task.wait(0.2) -- หน่วงเวลาพักพิกัดให้เซิร์ฟเวอร์อัปเดตตำแหน่งจริง
+    task.wait(0.25) -- พักพิกัดให้ตัวละครยืนนิ่งสนิทก่อนหยิบของ
 end
 
 -- --- PIPELINE EXECUTION ENGINE ---
@@ -195,17 +199,19 @@ local function runPipeline()
 
     updateStatus("⚡ Status: Moving & Collecting Fuel...")
 
-    -- STEP 1: วิ่งไปเก็บ Fuel 3 ชิ้น
+    -- STEP 1: วิ่งไปเก็บ Fuel 3 ชิ้น (ปรับแก้จังหวะจับไอเทมให้ชัวร์)
     local collectedCount = 0
     while collectedCount < 3 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
-        if fuel then
+        if fuel and fuel.Parent then
             collectedCount = collectedCount + 1
             updateStatus("📦 Moving to Fuel #" .. collectedCount)
             safeTweenMoveTo(fuel:GetPivot().Position, humanoidRootPart)
+            
+            -- ถึงแล้วหยุดนิ่งแล้วเรียกฟังก์ชันดึง Fuel ทันที
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-            task.wait(0.3)
+            task.wait(0.4) -- รอจังหวะเก็บบันทึกค่า
         else
             break
         end
@@ -249,7 +255,7 @@ local function runPipeline()
             if prompt then
                 updateStatus("🔓 Opening Power Box #" .. idx)
                 
-                if (humanoidRootPart.Position - finalBoxTarget).Magnitude <= 20 then
+                if (humanoidRootPart.Position - finalBoxTarget).Magnitude <= 22 then
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
                     else
@@ -257,7 +263,7 @@ local function runPipeline()
                         task.wait(prompt.HoldDuration + 0.1)
                         prompt:InputHoldEnd()
                     end
-                    task.wait(0.4)
+                    task.wait(0.5) -- หน่วงเวลารอเปิดกล่องสำเร็จ
                 end
             end
         end
