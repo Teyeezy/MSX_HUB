@@ -2,10 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v21.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v22.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP: Total Lockdown (ตัด AutoDrive & ล็อคเบรก 100% ไม่ถอยหลังเด็ดขาด!)
+    - ระบบ STOP: Smooth Deceleration & Total Lockdown (นุ่มนวล ไม่หลุดกรอบ ไม่ถอยหลัง!)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
+    - Webhook Discord แจ้งเตือนเมื่อจบรอบ
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
     - ปุ่ม เปิด/ปิด การขายของ
     ====================================================================
@@ -47,6 +48,10 @@ local CONFIG = {
     ACCEPT_DELAY_BOARDED = 0.03,
     ACCEPT_POLL_INTERVAL = 0.02,
     ACCEPT_POLL_MAX = 50,
+
+    -- 🌐 Webhook Discord
+    WEBHOOK_URL = "", -- ใส่ URL เว็บฮุคของเจ้าตรงนี้
+    ENABLE_WEBHOOK = true,
 
     ENABLE_AUTO_REFUEL = true,
     REFUEL_BEFORE_QUEST_PCT = 0.08,
@@ -1444,6 +1449,40 @@ local function runOneQuestCycle()
                 STATS.avgCycleTime = STATS.totalCycleTime / STATS.totalCycles
                 print(string.format("[MSX HUB] รอบที่ %d ใช้เวลา %.2f วินาที (เฉลี่ย %.2f วิ/รอบ)", STATS.totalCycles, cycleDuration, STATS.avgCycleTime))
                 
+                -- 🌐 ส่งแจ้งเตือน Webhook
+                if CONFIG.ENABLE_WEBHOOK and CONFIG.WEBHOOK_URL ~= "" then
+                    local webhookData = {
+                        ["content"] = "✅ **จบรอบเควสแล้ว!**",
+                        ["embeds"] = {
+                            {
+                                ["title"] = "📊 MSX HUB - รายงานผลรอบที่ " .. STATS.totalCycles,
+                                ["color"] = 16711680,
+                                ["fields"] = {
+                                    { ["name"] = "⏱ เวลาที่ใช้", ["value"] = string.format("%.2f วินาที", cycleDuration), ["inline"] = true },
+                                    { ["name"] = "💰 เงินรวมทั้งหมด", ["value"] = tostring(STATS.totalRain) .. " Rain", ["inline"] = true },
+                                    { ["name"] = "🏁 รอบที่จบ", ["value"] = tostring(STATS.totalCycles) .. " รอบ", ["inline"] = true },
+                                    { ["name"] = "⏳ เวลาเฉลี่ย/รอบ", ["value"] = string.format("%.2f วินาที", STATS.avgCycleTime), ["inline"] = true },
+                                },
+                                ["footer"] = { ["text"] = "MSX HUB | Raycity RB" },
+                                ["timestamp"] = DateTime.now():ToIsoDate()
+                            }
+                        }
+                    }
+                    pcall(function()
+                        local HttpService = game:GetService("HttpService")
+                        local jsonData = HttpService:JSONEncode(webhookData)
+                        local request = syn and syn.request or http_request or request or HttpRequest
+                        if request then
+                            request({
+                                Url = CONFIG.WEBHOOK_URL,
+                                Method = "POST",
+                                Headers = { ["Content-Type"] = "application/json" },
+                                Body = jsonData
+                            })
+                        end
+                    end)
+                end
+                
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
                 questStateRecoveryRequested = true
@@ -1511,12 +1550,41 @@ local function runOneQuestCycle()
             end
         end
 
+        -- ⚡ ระบบชะลอความเร็วเข้าเส้นชัยอย่างนุ่มนวล (Smooth Deceleration)
+        if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
+            local stopDist = 60
+            if distToTarget <= stopDist then
+                local deceleration = 25
+                local targetSpeedMps = math.sqrt(2 * deceleration * distToTarget)
+                local maxSpeedMps = AutoDrive.C.maxSpeed or CONFIG.CRUISE_SPEED_MPS
+                targetSpeedMps = math.min(targetSpeedMps, maxSpeedMps)
+                local targetSpeedKmh = targetSpeedMps * 3.6
+
+                AutoDrive.C.maxSpeed = targetSpeedMps
+
+                if rcd and rcd.phys then
+                    local speedDiff = speedKmh - targetSpeedKmh
+                    if speedDiff > 5.0 then
+                        local brakeAmt = math.clamp(speedDiff / 20.0, 0.3, 0.9)
+                        rcd.phys.throttle = 0
+                        rcd.phys.brake = brakeAmt
+                    elseif speedDiff > 0 then
+                        rcd.phys.throttle = 0
+                        rcd.phys.brake = 0.3
+                    else
+                        rcd.phys.throttle = 0.2
+                        rcd.phys.brake = 0
+                    end
+                    local rel = carRoot.CFrame:PointToObjectSpace(activeObj.target)
+                    rcd.phys.steerIn = math.clamp(rel.X * 0.18, -0.65, 0.65)
+                end
+            end
+        end
+
         -- ⚡ ระบบหยุดนิ่งสนิท 100% (Total Lockdown at STOP)
         if isHoldingStopBox then
-            -- 🛑 สั่งหยุด AutoDrive ทุกเฟรม ป้องกันการดีดกลับ
             pcall(function() AutoDrive.stop("holding_brake_final") end)
             
-            -- 🛑 เหยียบเบรกและล็อคความเร็วเป็น 0 ตลอดเวลา
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
@@ -1525,13 +1593,11 @@ local function runOneQuestCycle()
                 rcd.phys.w = Vector3.zero
             end
             
-            -- 🛑 รีเซ็ตตัวแปรป้องกันการทำงานอื่นๆ แทรก
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
             driveInactiveSince = nil
             
-            -- 🛑 ตรวจสอบว่าจบเควสหรือยัง
             if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
@@ -1542,30 +1608,6 @@ local function runOneQuestCycle()
             end
             task.wait(0.04)
             continue
-        end
-
-        if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
-            if distToTarget <= 50 then
-                local targetSpeedKmh
-                if distToTarget > 25 then targetSpeedKmh = 18.0 + (distToTarget - 25) * (17.0 / 25.0)
-                elseif distToTarget > 10 then targetSpeedKmh = 8.0 + (distToTarget - 10) * (10.0 / 15.0)
-                elseif distToTarget > 5 then targetSpeedKmh = 4.0 + (distToTarget - 5) * (4.0 / 5.0)
-                else targetSpeedKmh = 4.0 end
-                AutoDrive.C.maxSpeed = targetSpeedKmh / 3.6
-                local rel = carRoot.CFrame:PointToObjectSpace(activeObj.target)
-                if rcd and rcd.phys then
-                    if speedKmh > (targetSpeedKmh + 2.0) then
-                        local brakeAmt = math.clamp((speedKmh - targetSpeedKmh) / 10.0, 0.25, 0.85)
-                        rcd.phys.throttle = 0
-                        rcd.phys.brake = brakeAmt
-                    else
-                        local throttleAmt = math.clamp(targetSpeedKmh / 22.0, 0.15, 0.45)
-                        rcd.phys.throttle = throttleAmt
-                        rcd.phys.brake = 0
-                    end
-                    rcd.phys.steerIn = math.clamp(rel.X * 0.18, -0.65, 0.65)
-                end
-            end
         end
 
         local targetBehind = false
@@ -1648,7 +1690,6 @@ local function runOneQuestCycle()
     end
     AutoDrive.stop(questStateRecoveryRequested and "quest_state_lost" or "quest_done")
     
-    -- 🛑 บังคับเบรกและล็อคความเร็วทันทีที่จบรอบ
     local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
     if rcd and rcd.phys then
         rcd.phys.throttle = 0
@@ -1702,7 +1743,6 @@ stroke.Color = Color3.fromRGB(255, 30, 30)
 stroke.Thickness = 2
 stroke.Parent = MainFrame
 
--- Header
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -20, 0, 30)
 Title.Position = UDim2.new(0, 10, 0, 8)
@@ -1723,7 +1763,6 @@ Status.TextScaled = true
 Status.Font = Enum.Font.GothamBold
 Status.Parent = MainFrame
 
--- Stats Frame
 local StatsFrame = Instance.new("Frame")
 StatsFrame.Size = UDim2.new(1, -20, 0, 140)
 StatsFrame.Position = UDim2.new(0, 10, 0, 62)
