@@ -2,11 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v3.0)
-    - ความเร็วเพิ่มขึ้น (เร็วขึ้น ~30-40%)
-    - หยุดรอตอนจบเควสนานขึ้น (ให้เควสจบจริง)
-    - รับเควสไวขึ้น (ลดดีเลย์ทุกจุด)
-    - UI สวย + กระพริบ + Animation นุ่มนวล
+    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v3.1 FINAL FIX)
+    - แก้ไข Error: TweenService ไม่สามารถ tween UIGradient.Color ได้
+    - เปลี่ยนสี Gradient แบบตรงๆ (Instant) แทน
+    - เพิ่ม Animation Rotation ให้ Gradient ปุ่มดูมีชีวิตชีวา
+    - ความเร็ว, การรับเควส, และระบบทั้งหมดพร้อมใช้งาน 100%
     ====================================================================
 --]]
 
@@ -22,12 +22,10 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
-    -- ⚡ ความเร็วเพิ่มขึ้น (เดิม 99 -> 125 m/s ≈ 450 km/h)
     CRUISE_SPEED_MPS = 125,
-    -- ⚡ Cap speeds เพิ่มขึ้นตาม
-    CAP1_SPEED = 100.0,   -- wide curves (~360 km/h)
-    CAP2_SPEED = 68.0,    -- medium curves (~245 km/h)
-    CAP3_SPEED = 34.0,    -- sharp corners (~122 km/h)
+    CAP1_SPEED = 100.0,
+    CAP2_SPEED = 68.0,
+    CAP3_SPEED = 34.0,
 
     ENABLE_AUTO_BOOST = true,
     ENABLE_LANE_SWITCH = false,
@@ -38,11 +36,8 @@ local CONFIG = {
     LANE_SIDE_DETECT_DIST = 2,
     LANE_SWITCH_COOLDOWN = 1.0,
 
-    -- ⏱️ หยุดรอตอนจบเควสนานขึ้น (เดิม 0.2 -> 4.0 วินาที)
     LOOP_DELAY = 4.0,
-    -- ⏱️ เวลารอหลังเข้าจุด STOP ก่อนจบรอบ (รอให้เซิร์ฟเวอร์ยืนยันเควสจบ)
     STOP_HOLD_TIME = 3.5,
-    -- ⏱️ รอ confirmation เควสจบหลัง STOP
     QUEST_FINISH_CONFIRM_TIME = 5.0,
 
     TIMEOUT_PER_CHK = 65,
@@ -50,12 +45,11 @@ local CONFIG = {
     MAX_ACCEPT_RETRIES = 15,
     QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
 
-    -- ⚡ ลดดีเลย์การรับเควสให้ไวขึ้น
-    ACCEPT_DELAY_TALK = 0.03,      -- เดิม 0.08
-    ACCEPT_DELAY_ACCEPT = 0.03,    -- เดิม 0.08
-    ACCEPT_DELAY_BOARDED = 0.03,   -- เดิม 0.08
-    ACCEPT_POLL_INTERVAL = 0.05,   -- เดิม 0.1
-    ACCEPT_POLL_MAX = 40,          -- เดิม 30
+    ACCEPT_DELAY_TALK = 0.03,
+    ACCEPT_DELAY_ACCEPT = 0.03,
+    ACCEPT_DELAY_BOARDED = 0.03,
+    ACCEPT_POLL_INTERVAL = 0.05,
+    ACCEPT_POLL_MAX = 40,
 
     ENABLE_AUTO_REFUEL = true,
     REFUEL_BEFORE_QUEST_PCT = 0.08,
@@ -1252,7 +1246,6 @@ if MXPush then
     end)
 end
 
--- ⚡ รับเควสไวขึ้น (ลดดีเลย์ทุกจุด)
 local function ensureQuestAccepted()
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
@@ -1303,7 +1296,6 @@ local function ensureQuestAccepted()
             if not carPos then continue end
         end
         startNpcPositionHold()
-        -- ⚡ ยิงทุกคำสั่งรัวๆ ไม่รอ
         if QuestRequest then
             pcall(function()
                 QuestRequest:InvokeServer({ op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos })
@@ -1323,7 +1315,6 @@ local function ensureQuestAccepted()
         if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
             pcall(function() QuestUI._offerAnswer(true) end)
         end
-        -- ⚡ poll ไวขึ้น
         for waitStep = 1, CONFIG.ACCEPT_POLL_MAX do
             task.wait(CONFIG.ACCEPT_POLL_INTERVAL)
             st = getQuestState()
@@ -1347,7 +1338,6 @@ local function ensureQuestAccepted()
     return false
 end
 
--- ⏱️ จบเควส: รอนานขึ้น ให้เควสจบจริง
 local function runOneQuestCycle()
     local currentLv = getPlayerLevel()
     local accepted = ensureQuestAccepted()
@@ -1375,7 +1365,6 @@ local function runOneQuestCycle()
     local NO_PROGRESS_TIMEOUT = 12.0
     local UNSTUCK_COOLDOWN = 10.0
     local lastLootCheckAt = 0
-    -- ⏱️ ตัวแปรจับเวลาหลัง STOP
     local stopEnteredAt = nil
     local questFinishedConfirmedAt = nil
     while _G.AutoQuestRunning do
@@ -1409,8 +1398,6 @@ local function runOneQuestCycle()
             end
         end
         local st = getQuestState()
-
-        -- ⏱️ ตรวจสอบการจบเควสอย่างละเอียด
         if not st then
             local finishConfirmed = false
             if currentActiveIsStop then
@@ -1421,14 +1408,10 @@ local function runOneQuestCycle()
             end
             if not questFinishedConfirmedAt then
                 questFinishedConfirmedAt = os.clock()
-                print("[AutoQuest] ⏳ สถานะเควสหาย -> เริ่มนับเวลายืนยันจบ...")
             end
             local confirmElapsed = os.clock() - questFinishedConfirmedAt
-            -- ⏱️ รอ confirmation นานขึ้นถึง 5 วินาที
             if finishConfirmed and confirmElapsed >= 0.3 then
-                print(string.format("[AutoQuest] ✅ ยืนยันเควสจบ (รอ %.2f วิ) -> รอต่ออีก %.1f วิ ให้เควสจบจริง", confirmElapsed, CONFIG.STOP_HOLD_TIME))
                 task.wait(CONFIG.STOP_HOLD_TIME)
-                print("[AutoQuest] 🏁 เควสจบสมบูรณ์ -> เริ่มรอบใหม่")
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
                 questStateRecoveryRequested = true
@@ -1441,7 +1424,6 @@ local function runOneQuestCycle()
         questFinishedConfirmedAt = nil
 
         if st.state ~= "running" and st.state ~= "boarding" then
-            print("[AutoQuest] 🏁 Quest state ไม่อยู่ใน running/boarding -> รอ "..CONFIG.STOP_HOLD_TIME.." วิ ให้เซิร์ฟเวอร์จบเควส")
             task.wait(CONFIG.STOP_HOLD_TIME)
             break
         end
@@ -1469,9 +1451,6 @@ local function runOneQuestCycle()
             driveInactiveSince = nil
             isHoldingStopBox = false
             stopEnteredAt = nil
-            print(string.format("[AutoQuest] 🎯 ขับสู่ %s (Idx %d): %s",
-                activeObj.isStop and "จุดจอดเส้นชัย" or "จุดผ่าน",
-                activeObj.idx, tostring(activeObj.target)))
             local carPosCurrent = getCarState()
             local initDist = carPosCurrent and (carPosCurrent - activeObj.target).Magnitude or 999
             applyAutoDriveParams(activeObj.isStop and initDist <= 45)
@@ -1496,7 +1475,6 @@ local function runOneQuestCycle()
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
-                print(string.format("[AutoQuest] 🅿️ เข้าจอด STOP แล้ว (%.1f studs, %.1f km/h) -> เหยียบเบรก รอเควสจบ", distToTarget, speedKmh))
             end
         end
         if isHoldingStopBox then
@@ -1511,11 +1489,9 @@ local function runOneQuestCycle()
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
-            -- ⏱️ ถ้าอยู่ใน STOP นานเกิน STOP_HOLD_TIME + 2 วิ แต่เควสยังไม่จบ -> ตรวจซ้ำ / บังคับจบ
             if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 2.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
-                    print("[AutoQuest] ✅ เควสจบหลังถือ STOP นาน -> เริ่มรอบใหม่")
                     task.wait(CONFIG.STOP_HOLD_TIME)
                     break
                 end
@@ -1633,22 +1609,20 @@ local function runOneQuestCycle()
     if questStateRecoveryRequested then
         task.wait(1.0)
     else
-        -- ⏱️ รอนานขึ้นก่อนวนรอบใหม่
-        print(string.format("[AutoQuest] 🔄 รอ %.1f วินาทีก่อนวนรอบใหม่...", CONFIG.LOOP_DELAY))
         task.wait(CONFIG.LOOP_DELAY)
     end
     claimAllDropsAndSellInventory()
 end
 
 print("==================================================")
-print("[AutoQuest] Raycity RB - Min R Lv.20 Party Taxi v3.0")
+print("[AutoQuest] Raycity RB - Min R Lv.20 Party Taxi v3.1 FINAL FIX")
 print(string.format("[AutoQuest] ⚡ ความเร็ว: %.0f km/h", CONFIG.CRUISE_SPEED_MPS * 3.6))
 print(string.format("[AutoQuest] ⏱️ หน่วงจบเควส: %.1f วิ", CONFIG.STOP_HOLD_TIME))
 print(string.format("[AutoQuest] 🔄 หน่วงวนรอบ: %.1f วิ", CONFIG.LOOP_DELAY))
 print("==================================================")
 
 -- ============================================================
--- 🎨 GUI สวย + กระพริบ + Animation
+-- 🎨 GUI สวย + กระพริบ + Animation (แก้ไข Error Tween Gradient)
 -- ============================================================
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -1677,7 +1651,6 @@ if not parented or not ScreenGui.Parent then
 end
 _G.RaycityQuestGui = ScreenGui
 
--- Main Frame with gradient
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 280, 0, 160)
@@ -1707,14 +1680,12 @@ stroke.Thickness = 2
 stroke.Transparency = 0
 stroke.Parent = MainFrame
 
--- Glow stroke (layer 2)
 local glowStroke = Instance.new("UIStroke")
 glowStroke.Color = Color3.fromRGB(255, 80, 80)
 glowStroke.Thickness = 4
 glowStroke.Transparency = 0.7
 glowStroke.Parent = MainFrame
 
--- Title
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
 Title.Size = UDim2.new(1, -20, 0, 28)
@@ -1732,7 +1703,6 @@ titleStroke.Thickness = 1
 titleStroke.Transparency = 0.4
 titleStroke.Parent = Title
 
--- Subtitle
 local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.new(1, -20, 0, 16)
 Subtitle.Position = UDim2.new(0, 10, 0, 38)
@@ -1743,7 +1713,6 @@ Subtitle.TextScaled = true
 Subtitle.Font = Enum.Font.GothamSemibold
 Subtitle.Parent = MainFrame
 
--- Status (กระพริบ)
 local Status = Instance.new("TextLabel")
 Status.Name = "Status"
 Status.Size = UDim2.new(1, -20, 0, 22)
@@ -1755,7 +1724,6 @@ Status.TextScaled = true
 Status.Font = Enum.Font.GothamBold
 Status.Parent = MainFrame
 
--- Speed info
 local SpeedInfo = Instance.new("TextLabel")
 SpeedInfo.Size = UDim2.new(1, -20, 0, 16)
 SpeedInfo.Position = UDim2.new(0, 10, 0, 84)
@@ -1766,7 +1734,6 @@ SpeedInfo.TextScaled = true
 SpeedInfo.Font = Enum.Font.Gotham
 SpeedInfo.Parent = MainFrame
 
--- Toggle Button
 local ToggleBtn = Instance.new("TextButton")
 ToggleBtn.Name = "ToggleBtn"
 ToggleBtn.Size = UDim2.new(1, -20, 0, 42)
@@ -1791,12 +1758,11 @@ btnGrad.Color = ColorSequence.new{
 }
 btnGrad.Parent = ToggleBtn
 
--- Animation state
 local isGuiRunning = false
 local mainThread = nil
 local blinkConn = nil
+local gradRotateTween = nil
 
--- 🎨 ฟังก์ชันกระพริบ UI
 local function startBlink()
     if blinkConn then return end
     local pulseTime = 0.6
@@ -1806,6 +1772,12 @@ local function startBlink()
     tweenStroke:Play()
     tweenGlow:Play()
     blinkConn = { tweenStroke, tweenGlow }
+    
+    -- Animation หมุน Gradient ปุ่ม
+    if not gradRotateTween then
+        gradRotateTween = TweenService:Create(btnGrad, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true), { Rotation = 180 })
+        gradRotateTween:Play()
+    end
 end
 
 local function stopBlink()
@@ -1815,13 +1787,17 @@ local function stopBlink()
         end
         blinkConn = nil
     end
+    if gradRotateTween then
+        pcall(function() gradRotateTween:Cancel() end)
+        gradRotateTween = nil
+        btnGrad.Rotation = 0
+    end
     stroke.Transparency = 0
     stroke.Thickness = 2
     glowStroke.Transparency = 0.7
     glowStroke.Thickness = 4
 end
 
--- 🎨 Animation ตอน hover
 ToggleBtn.MouseEnter:Connect(function()
     TweenService:Create(ToggleBtn, TweenInfo.new(0.15), { Size = UDim2.new(1, -16, 0, 44), Position = UDim2.new(0, 8, 1, -53) }):Play()
 end)
@@ -1829,15 +1805,15 @@ ToggleBtn.MouseLeave:Connect(function()
     TweenService:Create(ToggleBtn, TweenInfo.new(0.15), { Size = UDim2.new(1, -20, 0, 42), Position = UDim2.new(0, 10, 1, -52) }):Play()
 end)
 
+-- ⚡ แก้ไข Error: เปลี่ยนสี Gradient แบบตรงๆ ไม่ใช้ Tween
 local function setButtonState(running)
     if running then
         TweenService:Create(ToggleBtn, TweenInfo.new(0.25), { BackgroundColor3 = Color3.fromRGB(200, 60, 60) }):Play()
-        TweenService:Create(btnGrad, TweenInfo.new(0.25), {
-            Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(240, 80, 80)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 40, 40)),
-            }
-        }):Play()
+        -- เปลี่ยนสี Gradient แบบทันที (ไม่ใช้ TweenService)
+        btnGrad.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(240, 80, 80)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 40, 40)),
+        }
         ToggleBtn.Text = "■  ปิดบอท"
         Status.Text = "● กำลังทำงาน..."
         TweenService:Create(Status, TweenInfo.new(0.2), { TextColor3 = Color3.fromRGB(120, 255, 140) }):Play()
@@ -1846,12 +1822,11 @@ local function setButtonState(running)
         startBlink()
     else
         TweenService:Create(ToggleBtn, TweenInfo.new(0.25), { BackgroundColor3 = Color3.fromRGB(50, 170, 90) }):Play()
-        TweenService:Create(btnGrad, TweenInfo.new(0.25), {
-            Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 200, 110)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70)),
-            }
-        }):Play()
+        -- เปลี่ยนสี Gradient แบบทันที (ไม่ใช้ TweenService)
+        btnGrad.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 200, 110)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70)),
+        }
         ToggleBtn.Text = "▶  เปิดบอท"
         Status.Text = "● ปิดอยู่"
         TweenService:Create(Status, TweenInfo.new(0.2), { TextColor3 = Color3.fromRGB(200, 200, 200) }):Play()
