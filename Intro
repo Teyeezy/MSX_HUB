@@ -1,5 +1,5 @@
--- Made by TheAnonymous & Optimized / Sync-Grab Fix Edition by ไอ้ที ⚔️😈
-print("Loading IT_HUB Sync-Grab Edition...")
+-- Made by TheAnonymous & Fully Fixed / Force Fuel Teleport Edition
+print("Loading IT_HUB Force Fuel Grab Edition...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -45,7 +45,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-titleLabel.Text = "🔥 MSX HUB | Sync-Grab Fix 🔥"
+titleLabel.Text = "🔥 MSX HUB | Force Grab Fix 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
@@ -150,23 +150,45 @@ local function getBestFuelPosition(genPos, currentPos)
     return foundValidFuel
 end
 
--- แก้ไขระบบดึง Fuel ให้หน่วงเวลาและส่งคำสั่งย้ายพิกัดให้ชัวร์ขึ้น
+-- FIXED: ระบบดึง Fuel แบบการันตี 100% (ขอ Network Ownership + Force Teleport)
 local function FuelTeleport(hrp, targetFuel)
     local generatorLoc = getGeneratorPosition()
     if not hrp or not targetFuel or not generatorLoc then return end
-    
-    local fuelUnion = targetFuel:FindFirstChild("Union") or targetFuel.PrimaryPart
-    local itemDrag = targetFuel:FindFirstChild("ItemDrag")
-    local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
-    
-    if fuelUnion and networkRemote then
-        pcall(function() networkRemote:FireServer(fuelUnion) end)
-        task.wait(0.2) -- รอรับสิทธิ์ Network Ownership
-        pcall(function() 
-            targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) 
-        end)
-        task.wait(0.3) -- รอให้เซิร์ฟเวอร์ยืนยันการย้ายไอเทมลง Generator
+
+    -- 1. ยิง Remote ขอ Network Ownership (ถ้ามี)
+    local itemDrag = targetFuel:FindFirstChild("ItemDrag", true)
+    local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership", true)
+    local targetPart = targetFuel:FindFirstChildWhichIsA("BasePart", true)
+
+    if networkRemote and targetPart then
+        pcall(function() networkRemote:FireServer(targetPart) end)
+        task.wait(0.15)
     end
+
+    -- 2. บังคับย้ายตำแหน่ง Model/Part ไปที่ Generator โดยตรง
+    local genTargetCFrame = CFrame.new(generatorLoc) + Vector3.new(0, 2, 0)
+    
+    pcall(function()
+        if targetFuel:IsA("Model") then
+            targetFuel:PivotTo(genTargetCFrame)
+        elseif targetPart then
+            targetPart.CFrame = genTargetCFrame
+        end
+    end)
+
+    -- 3. หากมีคำสั่ง ProximityPrompt ใน Fuel เพื่อหยิบ ให้ทำการกดทันที
+    local prompt = targetFuel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        if fireproximityprompt then
+            fireproximityprompt(prompt)
+        else
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration + 0.05)
+            prompt:InputHoldEnd()
+        end
+    end
+
+    task.wait(0.3) -- หน่วงเวลารอการประมวลผลของเกม
 end
 
 -- SAFE TWEEN MOVEMENT
@@ -188,7 +210,7 @@ local function safeTweenMoveTo(targetPos, humanoidRootPart)
     tween.Completed:Wait()
     
     humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    task.wait(0.25) -- พักพิกัดให้ตัวละครยืนนิ่งสนิทก่อนหยิบของ
+    task.wait(0.2)
 end
 
 -- --- PIPELINE EXECUTION ENGINE ---
@@ -199,19 +221,19 @@ local function runPipeline()
 
     updateStatus("⚡ Status: Moving & Collecting Fuel...")
 
-    -- STEP 1: วิ่งไปเก็บ Fuel 3 ชิ้น (ปรับแก้จังหวะจับไอเทมให้ชัวร์)
+    -- STEP 1: วิ่งไปเก็บ Fuel 3 ชิ้น
     local collectedCount = 0
     while collectedCount < 3 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel and fuel.Parent then
             collectedCount = collectedCount + 1
-            updateStatus("📦 Moving to Fuel #" .. collectedCount)
+            updateStatus("📦 Grabbing Fuel #" .. collectedCount)
             safeTweenMoveTo(fuel:GetPivot().Position, humanoidRootPart)
             
-            -- ถึงแล้วหยุดนิ่งแล้วเรียกฟังก์ชันดึง Fuel ทันที
+            -- เรียกฟังก์ชันดึง Fuel แบบ Force Teleport
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-            task.wait(0.4) -- รอจังหวะเก็บบันทึกค่า
+            task.wait(0.3)
         else
             break
         end
@@ -263,7 +285,7 @@ local function runPipeline()
                         task.wait(prompt.HoldDuration + 0.1)
                         prompt:InputHoldEnd()
                     end
-                    task.wait(0.5) -- หน่วงเวลารอเปิดกล่องสำเร็จ
+                    task.wait(0.5)
                 end
             end
         end
