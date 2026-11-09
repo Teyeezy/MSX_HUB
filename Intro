@@ -2,13 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v16.0)
-    - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP: ล็อคเบรกค้างไว้ 100% ไม่ปล่อยจนจบรอบ ไม่ถอยหลัง
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v18.0)
+    - ใช้ Fluent UI (Stable & Beautiful)
+    - ระบบ STOP: Aggressive Braking (ไม่มี CFrame Freeze เด็ดขาด!)
+    - บังคับเบรกและล็อคความเร็วทุกเฟรม ไม่ถอยหลังหรือไหล
     - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ทันที (Zero Delay)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
-    - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
-    - ปุ่ม เปิด/ปิด การขายของ
     ====================================================================
 --]]
 
@@ -17,6 +16,11 @@ if _G.RaycityAutoQuestStop then
     task.wait(0.5)
 end
 
+-- ============================================================
+-- 🎨 Fluent UI (Stable Version)
+-- ============================================================
+local Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Init.lua"))()
+
 local CONFIG = {
     QUEST_ID = "S105",
     NPC_ID = "mission24:105",
@@ -24,7 +28,6 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
-    -- ⚡ ความเร็ว 99 m/s
     CRUISE_SPEED_MPS = 99,
     CAP1_SPEED = 82.0,
     CAP2_SPEED = 56.0,
@@ -35,7 +38,6 @@ local CONFIG = {
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
 
-    -- ⏱️ ลดดีเลย์ให้เหลือ 0 (เริ่มใหม่ทันที)
     LOOP_DELAY = 0.0,
     STOP_HOLD_TIME = 0.1,
     QUEST_FINISH_CONFIRM_TIME = 5.0,
@@ -45,7 +47,6 @@ local CONFIG = {
     MAX_ACCEPT_RETRIES = 15,
     QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
 
-    -- ⚡ รับเควสไว
     ACCEPT_DELAY_TALK = 0.03,
     ACCEPT_DELAY_ACCEPT = 0.03,
     ACCEPT_DELAY_BOARDED = 0.03,
@@ -102,8 +103,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
 local VirtualUser = game:GetService("VirtualUser")
 
 local function getPlayerLevel()
@@ -1395,28 +1394,12 @@ local function runOneQuestCycle()
     local lastLootCheckAt = 0
     local stopEnteredAt = nil
     local questFinishedConfirmedAt = nil
-    local isCycleFinished = false -- 🛑 ตัวแปรล็อคเบรก
 
     while _G.AutoQuestRunning do
         task.wait(0.05)
         tryAutoBoost()
         applyCorneringGripAssist()
         maintainHooks()
-        
-        -- 🛑 ถ้าจบรอบแล้ว ให้ล็อคเบรกค้างไว้จนกว่าจะเริ่มรอบใหม่
-        if isCycleFinished then
-            local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
-            if rcd and rcd.phys then
-                rcd.phys.throttle = 0
-                rcd.phys.brake = 1
-                rcd.phys.steerIn = 0
-                rcd.phys.v = Vector3.zero
-                rcd.phys.w = Vector3.zero
-            end
-            task.wait(0.08)
-            continue
-        end
-
         if CONFIG.ENABLE_AUTO_THRILL and (os.clock() - lastThrillReportAt) >= 1.5 then
             lastThrillReportAt = os.clock()
             pcall(function()
@@ -1456,7 +1439,6 @@ local function runOneQuestCycle()
             end
             local confirmElapsed = os.clock() - questFinishedConfirmedAt
             if finishConfirmed and confirmElapsed >= 0.3 then
-                isCycleFinished = true -- 🛑 ล็อคเบรก
                 task.wait(CONFIG.STOP_HOLD_TIME)
                 
                 local cycleDuration = os.clock() - cycleStartTime
@@ -1468,7 +1450,6 @@ local function runOneQuestCycle()
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
                 questStateRecoveryRequested = true
-                isCycleFinished = true -- 🛑 ล็อคเบรก
                 break
             end
             task.wait(0.15)
@@ -1478,7 +1459,6 @@ local function runOneQuestCycle()
         questFinishedConfirmedAt = nil
 
         if st.state ~= "running" and st.state ~= "boarding" then
-            isCycleFinished = true -- 🛑 ล็อคเบรก
             task.wait(CONFIG.STOP_HOLD_TIME)
             break
         end
@@ -1532,8 +1512,15 @@ local function runOneQuestCycle()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
             end
         end
-        if isHoldingStopBox or isCycleFinished then
+        if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
+            
+            -- 🛑 Aggressive Braking: เหยียบเบรกและล็อคความเร็วทุกเฟรม
+            local myRoot = getCarRoot()
+            if myRoot then
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
@@ -1547,7 +1534,7 @@ local function runOneQuestCycle()
             if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
-                    isCycleFinished = true
+                    if rcd and rcd.phys then rcd.phys.brake = 0 end
                     task.wait(0.2)
                     break
                 end
@@ -1658,7 +1645,7 @@ local function runOneQuestCycle()
     end
     AutoDrive.stop(questStateRecoveryRequested and "quest_state_lost" or "quest_done")
     
-    -- 🛑 บังคับเบรกและล็อคความเร็วทันทีที่จบรอบ
+    -- 🛑 Aggressive Braking: บังคับเบรกและล็อคความเร็วทันทีที่จบรอบ
     local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
     if rcd and rcd.phys then
         rcd.phys.throttle = 0
@@ -1682,194 +1669,94 @@ local function runOneQuestCycle()
 end
 
 -- ============================================================
--- 🎨 MSX HUB GUI (ธีมแดงดำ)
+-- 🎨 Fluent UI (Stable Version)
 -- ============================================================
-pcall(function()
-    if _G.RaycityQuestGui then _G.RaycityQuestGui:Destroy() end
-end)
+local Window = Fluent:CreateWindow({
+    Title = "MSX HUB",
+    SubTitle = "Raycity RB - Auto Quest",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(500, 320),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl
+})
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MSXHUB"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
-_G.RaycityQuestGui = ScreenGui
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
+}
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 360)
-MainFrame.Position = UDim2.new(0, 20, 0.5, -180)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = MainFrame
-
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(255, 30, 30)
-stroke.Thickness = 2
-stroke.Parent = MainFrame
-
--- Header
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -20, 0, 30)
-Title.Position = UDim2.new(0, 10, 0, 8)
-Title.BackgroundTransparency = 1
-Title.Text = "⛧ MSX HUB ⛧"
-Title.TextColor3 = Color3.fromRGB(255, 40, 40)
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBlack
-Title.Parent = MainFrame
-
-local Status = Instance.new("TextLabel")
-Status.Size = UDim2.new(1, -20, 0, 18)
-Status.Position = UDim2.new(0, 10, 0, 38)
-Status.BackgroundTransparency = 1
-Status.Text = "● OFFLINE"
-Status.TextColor3 = Color3.fromRGB(150, 150, 150)
-Status.TextScaled = true
-Status.Font = Enum.Font.GothamBold
-Status.Parent = MainFrame
-
--- Stats Frame
-local StatsFrame = Instance.new("Frame")
-StatsFrame.Size = UDim2.new(1, -20, 0, 140)
-StatsFrame.Position = UDim2.new(0, 10, 0, 62)
-StatsFrame.BackgroundColor3 = Color3.fromRGB(25, 20, 20)
-StatsFrame.BorderSizePixel = 0
-StatsFrame.Parent = MainFrame
-
-local statCorner = Instance.new("UICorner")
-statCorner.CornerRadius = UDim.new(0, 6)
-statCorner.Parent = StatsFrame
-
-local TimeLabel = Instance.new("TextLabel")
-TimeLabel.Size = UDim2.new(1, -20, 0, 20)
-TimeLabel.Position = UDim2.new(0, 10, 0, 8)
-TimeLabel.BackgroundTransparency = 1
-TimeLabel.Text = "⏱ TIME: 00:00:00"
-TimeLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
-TimeLabel.TextScaled = true
-TimeLabel.Font = Enum.Font.GothamSemibold
-TimeLabel.TextXAlignment = Enum.TextXAlignment.Left
-TimeLabel.Parent = StatsFrame
-
-local RainTotalLabel = Instance.new("TextLabel")
-RainTotalLabel.Size = UDim2.new(1, -20, 0, 20)
-RainTotalLabel.Position = UDim2.new(0, 10, 0, 30)
-RainTotalLabel.BackgroundTransparency = 1
-RainTotalLabel.Text = "💰 RAIN: 0"
-RainTotalLabel.TextColor3 = Color3.fromRGB(255, 60, 60)
-RainTotalLabel.TextScaled = true
-RainTotalLabel.Font = Enum.Font.GothamSemibold
-RainTotalLabel.TextXAlignment = Enum.TextXAlignment.Left
-RainTotalLabel.Parent = StatsFrame
-
-local RainHourLabel = Instance.new("TextLabel")
-RainHourLabel.Size = UDim2.new(1, -20, 0, 20)
-RainHourLabel.Position = UDim2.new(0, 10, 0, 52)
-RainHourLabel.BackgroundTransparency = 1
-RainHourLabel.Text = "⚡ RAIN/H: 0"
-RainHourLabel.TextColor3 = Color3.fromRGB(200, 50, 50)
-RainHourLabel.TextScaled = true
-RainHourLabel.Font = Enum.Font.GothamSemibold
-RainHourLabel.TextXAlignment = Enum.TextXAlignment.Left
-RainHourLabel.Parent = StatsFrame
-
-local CycleLabel = Instance.new("TextLabel")
-CycleLabel.Size = UDim2.new(1, -20, 0, 20)
-CycleLabel.Position = UDim2.new(0, 10, 0, 74)
-CycleLabel.BackgroundTransparency = 1
-CycleLabel.Text = "🏁 CYCLES: 0"
-CycleLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
-CycleLabel.TextScaled = true
-CycleLabel.Font = Enum.Font.GothamSemibold
-CycleLabel.TextXAlignment = Enum.TextXAlignment.Left
-CycleLabel.Parent = StatsFrame
-
-local AvgTimeLabel = Instance.new("TextLabel")
-AvgTimeLabel.Size = UDim2.new(1, -20, 0, 20)
-AvgTimeLabel.Position = UDim2.new(0, 10, 0, 96)
-AvgTimeLabel.BackgroundTransparency = 1
-AvgTimeLabel.Text = "⏳ AVG/CYCLE: 0.0 MIN"
-AvgTimeLabel.TextColor3 = Color3.fromRGB(200, 50, 50)
-AvgTimeLabel.TextScaled = true
-AvgTimeLabel.Font = Enum.Font.GothamSemibold
-AvgTimeLabel.TextXAlignment = Enum.TextXAlignment.Left
-AvgTimeLabel.Parent = StatsFrame
-
-local ToggleSellBtn = Instance.new("TextButton")
-ToggleSellBtn.Size = UDim2.new(1, -20, 0, 35)
-ToggleSellBtn.Position = UDim2.new(0, 10, 0, 215)
-ToggleSellBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
-ToggleSellBtn.Text = "💰 AUTO-SELL: ON"
-ToggleSellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleSellBtn.TextScaled = true
-ToggleSellBtn.Font = Enum.Font.GothamBold
-ToggleSellBtn.AutoButtonColor = false
-ToggleSellBtn.Parent = MainFrame
-
-local sellCorner = Instance.new("UICorner")
-sellCorner.CornerRadius = UDim.new(0, 6)
-sellCorner.Parent = ToggleSellBtn
-
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Size = UDim2.new(1, -20, 0, 45)
-ToggleBtn.Position = UDim2.new(0, 10, 1, -55)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
-ToggleBtn.Text = "▶ START"
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.TextScaled = true
-ToggleBtn.Font = Enum.Font.GothamBlack
-ToggleBtn.AutoButtonColor = false
-ToggleBtn.Parent = MainFrame
-
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 6)
-btnCorner.Parent = ToggleBtn
-
-local isGuiRunning = false
-local mainThread = nil
-local blinkTween = nil
-
-local function setButtonState(running)
-    if running then
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(60, 60, 60) }):Play()
-        ToggleBtn.Text = "■ STOP"
-        Status.Text = "● ONLINE (FARMING)"
-        Status.TextColor3 = Color3.fromRGB(255, 50, 50)
-        stroke.Color = Color3.fromRGB(255, 50, 50)
+local MainGroup = Tabs.Main:AddLeftGroupbox("Controls")
+MainGroup:AddButton({
+    Title = "Start Bot",
+    Description = "เริ่มต้นบอท",
+    Callback = function()
+        if isGuiRunning then return end
+        isGuiRunning = true
+        _G.AutoQuestRunning = true
+        isRunning = true
+        STATS.isRunning = true
         
-        if not blinkTween then
-            blinkTween = TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.5 })
-            blinkTween:Play()
+        if not STATS.startTime or not _G.HasRunBefore then
+            STATS.startTime = os.time()
+            _G.HasRunBefore = true
         end
-    else
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(200, 20, 20) }):Play()
-        ToggleBtn.Text = "▶ START"
-        Status.Text = "● OFFLINE"
-        Status.TextColor3 = Color3.fromRGB(150, 150, 150)
-        stroke.Color = Color3.fromRGB(255, 30, 30)
         
-        if blinkTween then
-            blinkTween:Cancel()
-            blinkTween = nil
-        end
-        stroke.Transparency = 0
+        print("[MSX HUB] >>> STARTED <<<")
+        AutoDrive.canCruise = function() return true end
+        
+        mainThread = task.spawn(function()
+            local cycleCount = 0
+            while _G.AutoQuestRunning do
+                local currentLv = getPlayerLevel()
+                cycleCount = cycleCount + 1
+                print(string.format("\n>>> CYCLE Min R Lv.20 (#%d) [Lv.%d] <<<", cycleCount, currentLv))
+                local ok, err = pcall(runOneQuestCycle)
+                if not ok then
+                    warn("[MSX HUB] Error:", err)
+                    pcall(function() AutoDrive.stop("error_recover") end)
+                    task.wait(1.5)
+                end
+                task.wait(CONFIG.LOOP_DELAY)
+            end
+            pcall(function() AutoDrive.stop("exit") end)
+            isGuiRunning = false
+        end)
     end
-end
+})
 
-local function setSellButtonState(enabled)
-    if enabled then
-        TweenService:Create(ToggleSellBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(180, 20, 20) }):Play()
-        ToggleSellBtn.Text = "💰 AUTO-SELL: ON"
-    else
-        TweenService:Create(ToggleSellBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(80, 80, 80) }):Play()
-        ToggleSellBtn.Text = "💰 AUTO-SELL: OFF"
+MainGroup:AddButton({
+    Title = "Stop Bot",
+    Description = "หยุดบอท",
+    Callback = function()
+        if not isGuiRunning then return end
+        _G.AutoQuestRunning = false
+        isRunning = false
+        isGuiRunning = false
+        STATS.isRunning = false
+        if mainThread then task.cancel(mainThread) end
+        pcall(function() AutoDrive.stop("user_stop") end)
+        print("[MSX HUB] >>> STOPPED <<<")
     end
-end
+})
+
+local StatsGroup = Tabs.Main:AddRightGroupbox("Statistics")
+StatsGroup:AddLabel("⏱ TIME: 00:00:00"):SetTitle("TimeLabel")
+StatsGroup:AddLabel("💰 RAIN: 0"):SetTitle("RainTotalLabel")
+StatsGroup:AddLabel("⚡ RAIN/H: 0"):SetTitle("RainHourLabel")
+StatsGroup:AddLabel("🏁 CYCLES: 0"):SetTitle("CycleLabel")
+StatsGroup:AddLabel("⏳ AVG/CYCLE: 0.0 MIN"):SetTitle("AvgTimeLabel")
+
+local ToggleSell = Tabs.Settings:AddToggle("AutoSell", {
+    Title = "Auto Sell",
+    Default = true,
+    Callback = function(value)
+        CONFIG.ENABLE_AUTO_SELL = value
+        print(string.format("[MSX HUB] AUTO-SELL: %s", value and "ON" or "OFF"))
+    end
+})
+
+ToggleSell:SetValue(true)
 
 local function updateStats()
     if not STATS.startTime then return end
@@ -1877,21 +1764,33 @@ local function updateStats()
     local h = math.floor(elapsed / 3600)
     local m = math.floor((elapsed % 3600) / 60)
     local s = elapsed % 60
-    TimeLabel.Text = string.format("⏱ TIME: %02d:%02d:%02d", h, m, s)
     
-    RainTotalLabel.Text = string.format("💰 RAIN: %s", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
-    
-    if elapsed > 0 then
-        local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
-        RainHourLabel.Text = string.format("⚡ RAIN/H: %s", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
-    end
-    
-    CycleLabel.Text = string.format("🏁 CYCLES: %d", STATS.totalCycles)
-    
-    if STATS.avgCycleTime > 0 then
-        local avgMin = STATS.avgCycleTime / 60
-        AvgTimeLabel.Text = string.format("⏳ AVG/CYCLE: %.2f MIN", avgMin)
-    end
+    pcall(function()
+        if Fluent and Fluent.Tabs and Fluent.Tabs.Main then
+            local elements = Fluent.Tabs.Main.Elements
+            if elements then
+                for _, elem in pairs(elements) do
+                    if elem.Type == "Label" and elem.Title == "TimeLabel" then
+                        elem:SetText(string.format("⏱ TIME: %02d:%02d:%02d", h, m, s))
+                    elseif elem.Type == "Label" and elem.Title == "RainTotalLabel" then
+                        elem:SetText(string.format("💰 RAIN: %s", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
+                    elseif elem.Type == "Label" and elem.Title == "RainHourLabel" then
+                        if elapsed > 0 then
+                            local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
+                            elem:SetText(string.format("⚡ RAIN/H: %s", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
+                        end
+                    elseif elem.Type == "Label" and elem.Title == "CycleLabel" then
+                        elem:SetText(string.format("🏁 CYCLES: %d", STATS.totalCycles))
+                    elseif elem.Type == "Label" and elem.Title == "AvgTimeLabel" then
+                        if STATS.avgCycleTime > 0 then
+                            local avgMin = STATS.avgCycleTime / 60
+                            elem:SetText(string.format("⏳ AVG/CYCLE: %.2f MIN", avgMin))
+                        end
+                    end
+                end
+            end
+        end
+    end)
 end
 
 task.spawn(function()
@@ -1903,72 +1802,6 @@ task.spawn(function()
     end
 end)
 
-ToggleSellBtn.MouseButton1Click:Connect(function()
-    CONFIG.ENABLE_AUTO_SELL = not CONFIG.ENABLE_AUTO_SELL
-    setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-    print(string.format("[MSX HUB] AUTO-SELL: %s", CONFIG.ENABLE_AUTO_SELL and "ON" or "OFF"))
-end)
-
-ToggleBtn.MouseEnter:Connect(function()
-    if not isGuiRunning then TweenService:Create(ToggleBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(255, 60, 60) }):Play() end
-end)
-ToggleBtn.MouseLeave:Connect(function()
-    if not isGuiRunning then TweenService:Create(ToggleBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(200, 20, 20) }):Play() end
-end)
-
-local function startBot()
-    if isGuiRunning then return end
-    isGuiRunning = true
-    _G.AutoQuestRunning = true
-    isRunning = true
-    STATS.isRunning = true
-    
-    if not STATS.startTime or not _G.HasRunBefore then
-        STATS.startTime = os.time()
-        _G.HasRunBefore = true
-    end
-    
-    setButtonState(true)
-    print("[MSX HUB] >>> STARTED <<<")
-    
-    AutoDrive.canCruise = function() return true end
-    
-    mainThread = task.spawn(function()
-        local cycleCount = 0
-        while _G.AutoQuestRunning do
-            local currentLv = getPlayerLevel()
-            cycleCount = cycleCount + 1
-            print(string.format("\n>>> CYCLE Min R Lv.20 (#%d) [Lv.%d] <<<", cycleCount, currentLv))
-            local ok, err = pcall(runOneQuestCycle)
-            if not ok then
-                warn("[MSX HUB] Error:", err)
-                pcall(function() AutoDrive.stop("error_recover") end)
-                task.wait(1.5)
-            end
-            task.wait(CONFIG.LOOP_DELAY)
-        end
-        pcall(function() AutoDrive.stop("exit") end)
-        isGuiRunning = false
-        setButtonState(false)
-    end)
-end
-
-local function stopBot()
-    if not isGuiRunning then return end
-    _G.AutoQuestRunning = false
-    isRunning = false
-    isGuiRunning = false
-    STATS.isRunning = false
-    if mainThread then task.cancel(mainThread) end
-    pcall(function() AutoDrive.stop("user_stop") end)
-    setButtonState(false)
-    print("[MSX HUB] >>> STOPPED <<<")
-end
-
-ToggleBtn.MouseButton1Click:Connect(function()
-    if isGuiRunning then stopBot() else startBot() end
-end)
-
 _G.RaycityAutoQuestStop = function()
     _G.AutoQuestRunning = false
     isRunning = false
@@ -1976,11 +1809,7 @@ _G.RaycityAutoQuestStop = function()
     STATS.isRunning = false
     if mainThread then pcall(function() task.cancel(mainThread) end) end
     pcall(function() AutoDrive.stop("user_stop") end)
-    if blinkTween then pcall(function() blinkTween:Cancel() end) end
-    pcall(function() if _G.RaycityQuestGui then _G.RaycityQuestGui:Destroy() end end)
     print("[MSX HUB] หยุดเรียบร้อย")
 end
 
-setButtonState(false)
-setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-print("[MSX HUB] GUI Red/Black Theme Loaded. Ready to farm!")
+print("[MSX HUB] GUI Fluent Theme Loaded. Ready to farm!")
