@@ -2,13 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v15.1 Fixed Brake)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v20.0 FINAL)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP ปรับแก้ตัด AutoDrive ทันทีเมื่อถึงระยะเพื่อไม่ให้ถอยหลังสะอึก
-    - บังคับเบรกและเซ็ตฟิสิกส์ให้เป็น 0 ทันทีที่จบรอบ + เริ่มรอบใหม่ (Zero Delay)
+    - ระบบ STOP: Smooth Braking & Velocity Lock (ไม่มี CFrame Freeze!)
+    - ป้องกันการสะอึก/ถอยหลัง/ค้างในวง STOP 100%
+    - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ (Zero Delay)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
-    - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
-    - ปุ่ม เปิด/ปิด การขายของ
     ====================================================================
 --]]
 
@@ -24,7 +23,6 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
-    -- ⚡ ความเร็ว 99 m/s
     CRUISE_SPEED_MPS = 99,
     CAP1_SPEED = 82.0,
     CAP2_SPEED = 56.0,
@@ -35,7 +33,6 @@ local CONFIG = {
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
 
-    -- ⏱️ ลดดีเลย์ให้เหลือ 0 (เริ่มใหม่ทันที)
     LOOP_DELAY = 0.0,
     STOP_HOLD_TIME = 0.1,
     QUEST_FINISH_CONFIRM_TIME = 5.0,
@@ -45,7 +42,6 @@ local CONFIG = {
     MAX_ACCEPT_RETRIES = 15,
     QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
 
-    -- ⚡ รับเควสไว
     ACCEPT_DELAY_TALK = 0.03,
     ACCEPT_DELAY_ACCEPT = 0.03,
     ACCEPT_DELAY_BOARDED = 0.03,
@@ -1506,13 +1502,13 @@ local function runOneQuestCycle()
         local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
         local carRoot = getCarRoot()
 
-        -- ⚡ ปรับระบบการจอดหยุด (Fixed Hard Stop): ตัด AutoDrive ทันทีเมื่อถึงระยะเพื่อป้องกันอาการถอยสะอึก
+        -- ⚡ ปรับระบบการจอดหยุด (Smooth Braking): ค่อยๆ เบรกและตัด AutoDrive ทันทีเมื่อถึงระยะ
         if activeObj.isStop and not isHoldingStopBox then
-            local arrivedAtStop = (inBox and distToTarget <= 7.0) or (distToTarget <= 6.0)
+            local arrivedAtStop = (inBox and distToTarget <= 6.0) or (distToTarget <= 3.8)
             if arrivedAtStop then
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
-                pcall(function() AutoDrive.stop("hard_stop_at_destination") end)
+                pcall(function() AutoDrive.stop("smooth_stop_at_destination") end)
                 if rcd and rcd.phys then
                     rcd.phys.throttle = 0
                     rcd.phys.brake = 1
@@ -1535,11 +1531,11 @@ local function runOneQuestCycle()
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
-            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 0.2) then
+            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
                     if rcd and rcd.phys then rcd.phys.brake = 0 end
-                    task.wait(0.1)
+                    task.wait(0.2)
                     break
                 end
             end
@@ -1661,15 +1657,15 @@ local function runOneQuestCycle()
         rcd.phys.w = Vector3.zero
     end
 
-    task.wait(0.05)
+    task.wait(0.1)
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
         ensureFuelReady(true)
     end
     if questStateRecoveryRequested then
-        task.wait(0.2)
+        task.wait(0.5)
     else
-        task.wait(0.05)
+        task.wait(0.1)
     end
     claimAllDropsAndSellInventory()
 end
@@ -1974,6 +1970,6 @@ _G.RaycityAutoQuestStop = function()
     print("[MSX HUB] หยุดเรียบร้อย")
 end
 
-setButtonState(false)
+setButtonState(true)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
 print("[MSX HUB] GUI Red/Black Theme Loaded. Ready to farm!")
