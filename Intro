@@ -1,5 +1,5 @@
--- Made by TheAnonymous & Optimized / Fully Patched by ไอ้ที ⚔️😈
-print("Loading IT_HUB Ultimate Farm Full Script...")
+-- Made by TheAnonymous & Optimized / Direct Teleport Bypass Edition by ไอ้ที ⚔️😈
+print("Loading IT_HUB Direct Teleport Ultra Speed...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -14,14 +14,14 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local MapFolder = Workspace:FindFirstChild("Map")
-local DroppedItemsFolder = Workspace:WaitForChild("DroppedItems")
+local DroppedItemsFolder = Workspace:FindFirstChild("DroppedItems")
 local PlayAgainRemote = ReplicatedStorage.Remotes.Misc:FindFirstChild("VotePlayAgain")
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
 local cachedGeneratorLocation = nil
 local PermanentNoclipEnabled = true
 
--- --- CREATING ADVANCED UI ---
+-- --- UI CREATION ---
 if CoreGui:FindFirstChild("IT_FarmHub") then
     CoreGui.IT_FarmHub:Destroy()
 end
@@ -44,7 +44,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-titleLabel.Text = "🔥 MSX HUB | Ultimate Farm 🔥"
+titleLabel.Text = "🔥 MSX HUB | Ultra Teleport 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
@@ -67,21 +67,20 @@ local function updateStatus(text)
     print("[IT_HUB] " .. text)
 end
 
--- --- PRO NOCLIP ENGINE (Anti-Rubberband Fix) ---
+-- --- NOCLIP ENGINE ---
 local function StartPermanentNoclip()
     RunService.Stepped:Connect(function()
         if not PermanentNoclipEnabled then return end
         local char = LocalPlayer.Character
         if char then
             for _, child in ipairs(char:GetDescendants()) do
-                if child:IsA("BasePart") and child.CanCollide then
+                if child:IsA("BasePart") then
                     child.CanCollide = false
                 end
             end
             local hrp = char:FindFirstChild("HumanoidRootPart")
             if hrp then 
-                -- ล้างค่าแรงเหวี่ยงไม่ให้เกมดึงกลับเวลาทะลุกำแพง
-                hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y > 0 and hrp.AssemblyLinearVelocity.Y or 0, 0)
+                hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             end
         end
@@ -158,36 +157,18 @@ local function FuelTeleport(hrp, targetFuel)
     local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
     if fuelUnion and networkRemote then
         pcall(function() networkRemote:FireServer(fuelUnion) end)
-        task.wait(0.1)
+        task.wait(0.05)
         pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) end)
-        task.wait(0.1)
+        task.wait(0.05)
     end
 end
 
--- SMART TRAVEL (Bypass Speed & Rubberband Check)
-local function smartCrawlTo(targetPos, humanoidRootPart)
+-- DIRECT TELEPORT (พุ่งวาปถึงเป้าหมายทันทีแบบไร้รอยต่อ)
+local function directTeleportTo(targetPos, humanoidRootPart)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    local TRAVEL_SPEED = 22 -- ใช้ความเร็วที่ปลอดภัยไม่ให้เซิร์ฟเวอร์เตะ
-    local heartbeatEvent = RunService.Heartbeat
-
-    while true do
-        if not humanoidRootPart or not humanoidRootPart.Parent then break end
-        local deltaTime = heartbeatEvent:Wait()
-        local currentPos = humanoidRootPart.Position
-        local remainingVector = finalTarget - currentPos
-        local totalDistance = remainingVector.Magnitude
-
-        if totalDistance <= 2.5 then
-            humanoidRootPart.CFrame = CFrame.new(finalTarget)
-            humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            break
-        end
-
-        local direction = remainingVector.Unit
-        local frameTravelDistance = math.min(TRAVEL_SPEED * deltaTime, totalDistance)
-        local nextPosition = currentPos + (direction * frameTravelDistance)
-        humanoidRootPart.CFrame = CFrame.new(nextPosition)
-    end
+    humanoidRootPart.CFrame = CFrame.new(finalTarget)
+    humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    task.wait(0.1)
 end
 
 -- --- PIPELINE EXECUTION ENGINE ---
@@ -196,20 +177,20 @@ local function runPipeline()
     task.wait(0.2)
     local genPos = getGeneratorPosition()
 
-    updateStatus("⚡ Status: Scanning & Collecting Fuel...")
+    updateStatus("⚡ Status: Teleporting & Collecting Fuel...")
 
-    -- STEP 1: เก็บ Fuel 3 ชิ้น
+    -- STEP 1: วาปไปเก็บ Fuel 3 ชิ้น
     local collectedCount = 0
     while collectedCount < 3 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
             collectedCount = collectedCount + 1
-            updateStatus("📦 Collecting Fuel: #" .. collectedCount)
-            smartCrawlTo(fuel:GetPivot().Position, humanoidRootPart)
-            task.wait(0.2)
+            updateStatus("📦 Teleporting to Fuel #" .. collectedCount)
+            directTeleportTo(fuel:GetPivot().Position, humanoidRootPart)
+            task.wait(0.1)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-            task.wait(0.3)
+            task.wait(0.15)
         else
             break
         end
@@ -217,7 +198,7 @@ local function runPipeline()
 
     updateStatus("🔌 Scanning Power Boxes (Targeting 2 Closest)...")
 
-    -- STEP 2: Scan and Target the 2 CLOSEST Power Boxes
+    -- STEP 2: Scan and Target 2 CLOSEST Power Boxes
     local powerBoxData = {}
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         local tiles = MapFolder.Tiles:GetChildren()
@@ -236,43 +217,39 @@ local function runPipeline()
     end
 
     if #powerBoxData > 0 then
-        -- จัดเรียงจากใกล้ไปไกล Generator
         table.sort(powerBoxData, function(a, b)
             return (genPos - a.Position).Magnitude < (genPos - b.Position).Magnitude
         end)
 
-        -- วนลูปจัดการ Power Box 2 อันที่ใกล้ที่สุดตามที่มึงสั่ง
         local targetLimit = math.min(2, #powerBoxData)
         for idx = 1, targetLimit do
             local chosenBoxData = powerBoxData[idx]
             local chosenBox = chosenBoxData.Instance
             local finalBoxTarget = chosenBoxData.Position
 
-            updateStatus("⚙️ Moving to Power Box #" .. idx .. " (Closest)")
-            smartCrawlTo(finalBoxTarget, humanoidRootPart)
-            task.wait(0.4)
+            updateStatus("⚙️ Teleporting to Power Box #" .. idx)
+            directTeleportTo(finalBoxTarget, humanoidRootPart)
+            task.wait(0.2)
 
-            if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 18 then
-                local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if prompt then
-                    updateStatus("🔓 Interacting with Power Box #" .. idx)
-                    for i = 1, 3 do
-                        if fireproximityprompt then
-                            fireproximityprompt(prompt)
-                        else
-                            prompt:InputHoldBegin()
-                            task.wait(prompt.HoldDuration + 0.05)
-                            prompt:InputHoldEnd()
-                        end
-                        task.wait(0.15)
+            local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if prompt then
+                updateStatus("🔓 Interacting with Box #" .. idx)
+                for i = 1, 3 do
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    else
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration + 0.02)
+                        prompt:InputHoldEnd()
                     end
+                    task.wait(0.1)
                 end
             end
         end
     end
 
     updateStatus("✅ Task Completed! Resetting game...")
-    task.wait(0.5)
+    task.wait(0.3)
     
     if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
         pcall(function()
