@@ -2,13 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v22.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v23.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP: Smooth Deceleration & Total Lockdown (นุ่มนวล ไม่หลุดกรอบ ไม่ถอยหลัง!)
-    - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
+    - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 500 studs)
+    - ระบบหยุดนิ่งสนิท 100% (Total Lockdown at STOP)
     - Webhook Discord แจ้งเตือนเมื่อจบรอบ
-    - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
-    - ปุ่ม เปิด/ปิด การขายของ
     ====================================================================
 --]]
 
@@ -1550,31 +1548,33 @@ local function runOneQuestCycle()
             end
         end
 
-        -- ⚡ ระบบชะลอความเร็วเข้าเส้นชัยอย่างนุ่มนวล (Smooth Deceleration)
+        -- ⚡ ระบบชะลอความเร็วล่วงหน้า 500 studs (Distance-Based Linear Deceleration)
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
-            local stopDist = 60
-            if distToTarget <= stopDist then
-                local deceleration = 25
-                local targetSpeedMps = math.sqrt(2 * deceleration * distToTarget)
-                local maxSpeedMps = AutoDrive.C.maxSpeed or CONFIG.CRUISE_SPEED_MPS
-                targetSpeedMps = math.min(targetSpeedMps, maxSpeedMps)
-                local targetSpeedKmh = targetSpeedMps * 3.6
-
+            local START_DECEL_DIST = 500
+            local MIN_SPEED = 5
+            
+            if distToTarget <= START_DECEL_DIST then
+                local speedRatio = distToTarget / START_DECEL_DIST
+                local targetSpeedMps = ((CONFIG.CRUISE_SPEED_MPS - MIN_SPEED) * speedRatio) + MIN_SPEED
+                
                 AutoDrive.C.maxSpeed = targetSpeedMps
 
                 if rcd and rcd.phys then
+                    local targetSpeedKmh = targetSpeedMps * 3.6
                     local speedDiff = speedKmh - targetSpeedKmh
+
                     if speedDiff > 5.0 then
-                        local brakeAmt = math.clamp(speedDiff / 20.0, 0.3, 0.9)
+                        local brakeAmt = math.clamp(speedDiff / 20.0, 0.2, 0.8)
                         rcd.phys.throttle = 0
                         rcd.phys.brake = brakeAmt
                     elseif speedDiff > 0 then
                         rcd.phys.throttle = 0
-                        rcd.phys.brake = 0.3
+                        rcd.phys.brake = 0.2
                     else
-                        rcd.phys.throttle = 0.2
+                        rcd.phys.throttle = 0.15
                         rcd.phys.brake = 0
                     end
+                    
                     local rel = carRoot.CFrame:PointToObjectSpace(activeObj.target)
                     rcd.phys.steerIn = math.clamp(rel.X * 0.18, -0.65, 0.65)
                 end
