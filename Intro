@@ -1,5 +1,5 @@
--- Made by TheAnonymous & Optimized / Network-Sync Edition
-print("Loading IT_HUB Network-Synced Edition...")
+-- Made by TheAnonymous & Optimized / Safe Speed & Anti-Lag Edition
+print("Loading IT_HUB Safe Speed Edition...")
 
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -10,6 +10,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
@@ -44,7 +45,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 titleLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-titleLabel.Text = "🔥 MSX HUB | Stable Farm 🔥"
+titleLabel.Text = "🔥 MSX HUB | Safe Speed 🔥"
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.Parent = mainFrame
@@ -157,19 +158,33 @@ local function FuelTeleport(hrp, targetFuel)
     local networkRemote = itemDrag and itemDrag:FindFirstChild("RequestNetworkOwnership")
     if fuelUnion and networkRemote then
         pcall(function() networkRemote:FireServer(fuelUnion) end)
-        task.wait(0.15) -- เพิ่มเวลาเพื่อลดอาการเน็ตช้า
+        task.wait(0.2)
         pcall(function() targetFuel:PivotTo(CFrame.new(generatorLoc) + Vector3.new(0, 1.5, 0)) end)
-        task.wait(0.15)
+        task.wait(0.2)
     end
 end
 
--- SAFE TELEPORT (วาปปลอดภัย ยืนยันพิกัดกับเซิร์ฟเวอร์ก่อนทำงาน)
-local function safeTeleportTo(targetPos, humanoidRootPart)
+-- SAFE TWEEN MOVEMENT (ลดความเร็วเหลือ 14 ป้องกันการโดนดึง 100%)
+local function safeTweenMoveTo(targetPos, humanoidRootPart)
     local finalTarget = targetPos + Vector3.new(0, 3, 0)
-    humanoidRootPart.CFrame = CFrame.new(finalTarget)
+    local distance = (finalTarget - humanoidRootPart.Position).Magnitude
+    
+    -- ปรับความเร็วลงมาที่ 14 (ระดับปลอดภัยเท่าเดินปกติ)
+    local SAFE_SPEED = 14
+    local tweenTime = math.max(0.2, distance / SAFE_SPEED)
+
+    local tweenInfo = TweenInfo.new(
+        tweenTime,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.Out
+    )
+
+    local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = CFrame.new(finalTarget)})
+    tween:Play()
+    tween.Completed:Wait()
+    
     humanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    -- หน่วงเวลาเล็กน้อยเพื่อให้เซิร์ฟเวอร์อัปเดตตำแหน่งจริง ป้องกันอาการเปิดไม่ได้ของ
-    task.wait(0.25)
+    task.wait(0.2) -- หน่วงเวลาพักพิกัดให้เซิร์ฟเวอร์อัปเดตตำแหน่งจริง
 end
 
 -- --- PIPELINE EXECUTION ENGINE ---
@@ -178,19 +193,19 @@ local function runPipeline()
     task.wait(0.3)
     local genPos = getGeneratorPosition()
 
-    updateStatus("⚡ Status: Teleporting & Collecting Fuel...")
+    updateStatus("⚡ Status: Moving & Collecting Fuel...")
 
-    -- STEP 1: วาปไปเก็บ Fuel 3 ชิ้น
+    -- STEP 1: วิ่งไปเก็บ Fuel 3 ชิ้น
     local collectedCount = 0
     while collectedCount < 3 do
         local fuel = getBestFuelPosition(genPos, humanoidRootPart.Position)
         if fuel then
             collectedCount = collectedCount + 1
-            updateStatus("📦 Teleporting to Fuel #" .. collectedCount)
-            safeTeleportTo(fuel:GetPivot().Position, humanoidRootPart)
+            updateStatus("📦 Moving to Fuel #" .. collectedCount)
+            safeTweenMoveTo(fuel:GetPivot().Position, humanoidRootPart)
             FuelTeleport(humanoidRootPart, fuel)
             excludeFuel[fuel] = true
-            task.wait(0.2)
+            task.wait(0.3)
         else
             break
         end
@@ -227,14 +242,13 @@ local function runPipeline()
             local chosenBox = chosenBoxData.Instance
             local finalBoxTarget = chosenBoxData.Position
 
-            updateStatus("⚙️ Teleporting to Power Box #" .. idx)
-            safeTeleportTo(finalBoxTarget, humanoidRootPart)
+            updateStatus("⚙️ Moving to Power Box #" .. idx)
+            safeTweenMoveTo(finalBoxTarget, humanoidRootPart)
 
             local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
             if prompt then
                 updateStatus("🔓 Opening Power Box #" .. idx)
                 
-                -- ตรวจสอบระยะห่างก่อนส่งคำสั่ง
                 if (humanoidRootPart.Position - finalBoxTarget).Magnitude <= 20 then
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
@@ -243,7 +257,7 @@ local function runPipeline()
                         task.wait(prompt.HoldDuration + 0.1)
                         prompt:InputHoldEnd()
                     end
-                    task.wait(0.3) -- หน่วงเวลารอการประมวลผลจากเซิร์ฟเวอร์
+                    task.wait(0.4)
                 end
             end
         end
