@@ -2,12 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v10.0 ABSOLUTE)
-    - ความเร็ว 99 m/s (356 km/h) เสถียร
-    - ระบบ STOP ล็อคเบรกและความเร็ว 100% ไม่ถอยหลังแม้แต่เซ็นติเมตร
-    - ระบบ Bypass หน้าต่างรับเควสแบบเงียบ (ไม่เด้งค้าง)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v11.0)
+    - ธีมสีแดงดำ สไตล์ MSX HUB
+    - ระบบ STOP ล็อคเบรกและความเร็ว 100% ไม่ถอยหลัง
+    - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
-    - ปุ่ม เปิด/ปิด การขายของ (ไม่มี UIGradient ไร้ Error 100%)
+    - ปุ่ม เปิด/ปิด การขายของ (ไม่มี UIGradient ไร้ Error)
     ====================================================================
 --]]
 
@@ -48,8 +48,8 @@ local CONFIG = {
     ACCEPT_DELAY_TALK = 0.03,
     ACCEPT_DELAY_ACCEPT = 0.03,
     ACCEPT_DELAY_BOARDED = 0.03,
-    ACCEPT_POLL_INTERVAL = 0.05,
-    ACCEPT_POLL_MAX = 40,
+    ACCEPT_POLL_INTERVAL = 0.02, -- เร็วขึ้น!
+    ACCEPT_POLL_MAX = 50,        -- รัวขึ้น!
 
     ENABLE_AUTO_REFUEL = true,
     REFUEL_BEFORE_QUEST_PCT = 0.08,
@@ -104,6 +104,8 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local function getPlayerLevel()
     local prof = (getrenv and getrenv().shared.RaycityShop and getrenv().shared.RaycityShop.profile and getrenv().shared.RaycityShop.profile.get and getrenv().shared.RaycityShop.profile.get())
@@ -115,32 +117,32 @@ local function getPlayerLevel()
 end
 
 local RBRCQuest = ReplicatedStorage:WaitForChild("RBRCQuest", 10)
-if not RBRCQuest then warn("[AutoQuest] Error: ไม่พบ RBRCQuest"); return end
+if not RBRCQuest then warn("[MSX HUB] Error: ไม่พบ RBRCQuest"); return end
 local Remotes = RBRCQuest:WaitForChild("Remotes", 10)
-if not Remotes then warn("[AutoQuest] Error: ไม่พบ Remotes"); return end
+if not Remotes then warn("[MSX HUB] Error: ไม่พบ Remotes"); return end
 local QuestRequest = Remotes:WaitForChild("QuestRequest", 10)
 local QuestEventUp = Remotes:FindFirstChild("QuestEventUp")
 
 local QuestDataModule = RBRCQuest:WaitForChild("QuestData", 10)
-if not QuestDataModule then warn("[AutoQuest] Error: ไม่พบ QuestData"); return end
+if not QuestDataModule then warn("[MSX HUB] Error: ไม่พบ QuestData"); return end
 local QuestData = require(QuestDataModule)
 
 local RaycityUi = ReplicatedStorage:WaitForChild("RaycityUi", 10)
-if not RaycityUi then warn("[AutoQuest] Error: ไม่พบ RaycityUi"); return end
+if not RaycityUi then warn("[MSX HUB] Error: ไม่พบ RaycityUi"); return end
 local AutoDriveModule = RaycityUi:WaitForChild("AutoDrive", 10)
 local NavigationModule = RaycityUi:WaitForChild("Navigation", 10)
-if not AutoDriveModule or not NavigationModule then warn("[AutoQuest] Error: โหลด AutoDrive/Navigation ไม่สำเร็จ"); return end
+if not AutoDriveModule or not NavigationModule then warn("[MSX HUB] Error: โหลด AutoDrive/Navigation ไม่สำเร็จ"); return end
 local AutoDrive = require(AutoDriveModule)
 local Navigation = require(NavigationModule)
 
 local RCDrive = ReplicatedStorage:WaitForChild("RCDrive", 10)
-if not RCDrive then warn("[AutoQuest] Error: ไม่พบ RCDrive"); return end
+if not RCDrive then warn("[MSX HUB] Error: ไม่พบ RCDrive"); return end
 local EconomyRulesModule = RCDrive:WaitForChild("EconomyRules", 10)
-if not EconomyRulesModule then warn("[AutoQuest] Error: ไม่พบ EconomyRules"); return end
+if not EconomyRulesModule then warn("[MSX HUB] Error: ไม่พบ EconomyRules"); return end
 local EconomyRules = require(EconomyRulesModule)
 
 if type(AutoDrive) ~= "table" or type(AutoDrive.C) ~= "table" or type(AutoDrive.options) ~= "table" then
-    warn("[AutoQuest] Error: AutoDrive module โครงสร้างไม่พร้อม"); return
+    warn("[MSX HUB] Error: AutoDrive module โครงสร้างไม่พร้อม"); return
 end
 
 local function isAutoDriveActive()
@@ -156,7 +158,6 @@ pcall(function()
 end)
 
 if CONFIG.ENABLE_ANTI_AFK then
-    local VirtualUser = game:GetService("VirtualUser")
     pcall(function()
         LocalPlayer.Idled:Connect(function()
             VirtualUser:CaptureController()
@@ -1256,7 +1257,7 @@ if MXPush then
     end)
 end
 
--- 🛑 ฟังก์ชันรับเควส (Bypass หน้าต่างแบบไม่ค้าง)
+-- 🛑 ฟังก์ชันรับเควส (Bypass หน้าต่างแบบรัวๆ ไม่ค้าง)
 local function ensureQuestAccepted()
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
@@ -1324,14 +1325,28 @@ local function ensureQuestAccepted()
         local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
         if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
         
-        -- บังคับตอบรับเควสทันทีถ้าหน้าต่างเด้ง
+        -- บังคับตอบรับเควสทันที
         local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
-        if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
-            pcall(function() QuestUI._offerAnswer(true) end)
-        end
         
         for waitStep = 1, CONFIG.ACCEPT_POLL_MAX do
             task.wait(CONFIG.ACCEPT_POLL_INTERVAL)
+            
+            -- 1. ลองกดปุ่มตกลงผ่าน API ของตัวเกม
+            if QuestUI then
+                if QuestUI.offerShown and QuestUI.offerShown() then
+                    pcall(function() QuestUI._offerAnswer(true) end)
+                end
+                if QuestUI.dialogShown and QuestUI.dialogShown() then
+                    if QuestUI._dialogAnswer then pcall(function() QuestUI._dialogAnswer(true) end) end
+                end
+            end
+
+            -- 2. ลองใช้ VirtualUser กดปุ่ม Enter
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(Vector2.new(500, 500))
+            end)
+
             st = getQuestState()
             if st and st.questId == CONFIG.QUEST_ID then
                 if st.state == "running" then
@@ -1345,10 +1360,6 @@ local function ensureQuestAccepted()
                         end)
                     end
                 end
-            end
-            -- เช็คซ้ำเผื่อหน้าต่างเด้งช้า
-            if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
-                pcall(function() QuestUI._offerAnswer(true) end)
             end
         end
         task.wait(0.2)
@@ -1439,7 +1450,7 @@ local function runOneQuestCycle()
                 STATS.totalCycles = STATS.totalCycles + 1
                 STATS.totalCycleTime = STATS.totalCycleTime + cycleDuration
                 STATS.avgCycleTime = STATS.totalCycleTime / STATS.totalCycles
-                print(string.format("[AutoQuest] รอบที่ %d ใช้เวลา %.2f วินาที (เฉลี่ย %.2f วิ/รอบ)", STATS.totalCycles, cycleDuration, STATS.avgCycleTime))
+                print(string.format("[MSX HUB] รอบที่ %d ใช้เวลา %.2f วินาที (เฉลี่ย %.2f วิ/รอบ)", STATS.totalCycles, cycleDuration, STATS.avgCycleTime))
                 
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
@@ -1645,73 +1656,75 @@ local function runOneQuestCycle()
 end
 
 -- ============================================================
--- 🎨 GUI สำหรับควบคุมและแสดงผล
+-- 🎨 MSX HUB GUI (ธีมแดงดำ)
 -- ============================================================
 pcall(function()
     if _G.RaycityQuestGui then _G.RaycityQuestGui:Destroy() end
 end)
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "RaycityQuestGui"
+ScreenGui.Name = "MSXHUB"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 _G.RaycityQuestGui = ScreenGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 340)
-MainFrame.Position = UDim2.new(0, 20, 0.5, -170)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+MainFrame.Size = UDim2.new(0, 300, 0, 360)
+MainFrame.Position = UDim2.new(0, 20, 0.5, -180)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 
 local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
+corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = MainFrame
 
 local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(200, 60, 60)
+stroke.Color = Color3.fromRGB(255, 30, 30)
 stroke.Thickness = 2
 stroke.Parent = MainFrame
 
+-- Header
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -20, 0, 28)
-Title.Position = UDim2.new(0, 10, 0, 10)
+Title.Size = UDim2.new(1, -20, 0, 30)
+Title.Position = UDim2.new(0, 10, 0, 8)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡ ไอ้ที AutoQuest v10.0"
-Title.TextColor3 = Color3.fromRGB(255, 200, 200)
+Title.Text = "⛧ MSX HUB ⛧"
+Title.TextColor3 = Color3.fromRGB(255, 40, 40)
 Title.TextScaled = true
-Title.Font = Enum.Font.GothamBold
+Title.Font = Enum.Font.GothamBlack
 Title.Parent = MainFrame
 
 local Status = Instance.new("TextLabel")
-Status.Size = UDim2.new(1, -20, 0, 20)
-Status.Position = UDim2.new(0, 10, 0, 40)
+Status.Size = UDim2.new(1, -20, 0, 18)
+Status.Position = UDim2.new(0, 10, 0, 38)
 Status.BackgroundTransparency = 1
-Status.Text = "● ปิดอยู่"
-Status.TextColor3 = Color3.fromRGB(200, 200, 200)
+Status.Text = "● OFFLINE"
+Status.TextColor3 = Color3.fromRGB(150, 150, 150)
 Status.TextScaled = true
 Status.Font = Enum.Font.GothamBold
 Status.Parent = MainFrame
 
+-- Stats Frame
 local StatsFrame = Instance.new("Frame")
-StatsFrame.Size = UDim2.new(1, -20, 0, 130)
-StatsFrame.Position = UDim2.new(0, 10, 0, 65)
-StatsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+StatsFrame.Size = UDim2.new(1, -20, 0, 140)
+StatsFrame.Position = UDim2.new(0, 10, 0, 62)
+StatsFrame.BackgroundColor3 = Color3.fromRGB(25, 20, 20)
 StatsFrame.BorderSizePixel = 0
 StatsFrame.Parent = MainFrame
 
 local statCorner = Instance.new("UICorner")
-statCorner.CornerRadius = UDim.new(0, 8)
+statCorner.CornerRadius = UDim.new(0, 6)
 statCorner.Parent = StatsFrame
 
 local TimeLabel = Instance.new("TextLabel")
 TimeLabel.Size = UDim2.new(1, -20, 0, 20)
 TimeLabel.Position = UDim2.new(0, 10, 0, 8)
 TimeLabel.BackgroundTransparency = 1
-TimeLabel.Text = "⏱ เวลารัน: 00:00:00"
-TimeLabel.TextColor3 = Color3.fromRGB(180, 220, 255)
+TimeLabel.Text = "⏱ TIME: 00:00:00"
+TimeLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
 TimeLabel.TextScaled = true
 TimeLabel.Font = Enum.Font.GothamSemibold
 TimeLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1721,8 +1734,8 @@ local RainTotalLabel = Instance.new("TextLabel")
 RainTotalLabel.Size = UDim2.new(1, -20, 0, 20)
 RainTotalLabel.Position = UDim2.new(0, 10, 0, 30)
 RainTotalLabel.BackgroundTransparency = 1
-RainTotalLabel.Text = "💰 เงินรวม: 0 Rain"
-RainTotalLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+RainTotalLabel.Text = "💰 RAIN: 0"
+RainTotalLabel.TextColor3 = Color3.fromRGB(255, 60, 60)
 RainTotalLabel.TextScaled = true
 RainTotalLabel.Font = Enum.Font.GothamSemibold
 RainTotalLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1732,8 +1745,8 @@ local RainHourLabel = Instance.new("TextLabel")
 RainHourLabel.Size = UDim2.new(1, -20, 0, 20)
 RainHourLabel.Position = UDim2.new(0, 10, 0, 52)
 RainHourLabel.BackgroundTransparency = 1
-RainHourLabel.Text = "⚡ เงิน/ชั่วโมง: 0 Rain/h"
-RainHourLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
+RainHourLabel.Text = "⚡ RAIN/H: 0"
+RainHourLabel.TextColor3 = Color3.fromRGB(200, 50, 50)
 RainHourLabel.TextScaled = true
 RainHourLabel.Font = Enum.Font.GothamSemibold
 RainHourLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1743,8 +1756,8 @@ local CycleLabel = Instance.new("TextLabel")
 CycleLabel.Size = UDim2.new(1, -20, 0, 20)
 CycleLabel.Position = UDim2.new(0, 10, 0, 74)
 CycleLabel.BackgroundTransparency = 1
-CycleLabel.Text = "🏁 จบรอบ: 0 รอบ"
-CycleLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+CycleLabel.Text = "🏁 CYCLES: 0"
+CycleLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
 CycleLabel.TextScaled = true
 CycleLabel.Font = Enum.Font.GothamSemibold
 CycleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1754,8 +1767,8 @@ local AvgTimeLabel = Instance.new("TextLabel")
 AvgTimeLabel.Size = UDim2.new(1, -20, 0, 20)
 AvgTimeLabel.Position = UDim2.new(0, 10, 0, 96)
 AvgTimeLabel.BackgroundTransparency = 1
-AvgTimeLabel.Text = "⏳ เฉลี่ย/รอบ: 0.0 นาที"
-AvgTimeLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+AvgTimeLabel.Text = "⏳ AVG/CYCLE: 0.0 MIN"
+AvgTimeLabel.TextColor3 = Color3.fromRGB(200, 50, 50)
 AvgTimeLabel.TextScaled = true
 AvgTimeLabel.Font = Enum.Font.GothamSemibold
 AvgTimeLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1763,9 +1776,9 @@ AvgTimeLabel.Parent = StatsFrame
 
 local ToggleSellBtn = Instance.new("TextButton")
 ToggleSellBtn.Size = UDim2.new(1, -20, 0, 35)
-ToggleSellBtn.Position = UDim2.new(0, 10, 0, 205)
-ToggleSellBtn.BackgroundColor3 = Color3.fromRGB(60, 140, 200)
-ToggleSellBtn.Text = "💰 ขายของ: เปิด"
+ToggleSellBtn.Position = UDim2.new(0, 10, 0, 215)
+ToggleSellBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
+ToggleSellBtn.Text = "💰 AUTO-SELL: ON"
 ToggleSellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleSellBtn.TextScaled = true
 ToggleSellBtn.Font = Enum.Font.GothamBold
@@ -1773,22 +1786,22 @@ ToggleSellBtn.AutoButtonColor = false
 ToggleSellBtn.Parent = MainFrame
 
 local sellCorner = Instance.new("UICorner")
-sellCorner.CornerRadius = UDim.new(0, 8)
+sellCorner.CornerRadius = UDim.new(0, 6)
 sellCorner.Parent = ToggleSellBtn
 
 local ToggleBtn = Instance.new("TextButton")
 ToggleBtn.Size = UDim2.new(1, -20, 0, 45)
 ToggleBtn.Position = UDim2.new(0, 10, 1, -55)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 170, 90)
-ToggleBtn.Text = "▶  เปิดบอท"
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
+ToggleBtn.Text = "▶ START"
 ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleBtn.TextScaled = true
-ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.Font = Enum.Font.GothamBlack
 ToggleBtn.AutoButtonColor = false
 ToggleBtn.Parent = MainFrame
 
 local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 8)
+btnCorner.CornerRadius = UDim.new(0, 6)
 btnCorner.Parent = ToggleBtn
 
 local isGuiRunning = false
@@ -1797,22 +1810,22 @@ local blinkTween = nil
 
 local function setButtonState(running)
     if running then
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(220, 60, 60) }):Play()
-        ToggleBtn.Text = "■  ปิดบอท"
-        Status.Text = "● กำลังทำงาน..."
-        Status.TextColor3 = Color3.fromRGB(120, 255, 140)
-        stroke.Color = Color3.fromRGB(50, 220, 90)
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(60, 60, 60) }):Play()
+        ToggleBtn.Text = "■ STOP"
+        Status.Text = "● ONLINE (FARMING)"
+        Status.TextColor3 = Color3.fromRGB(255, 50, 50)
+        stroke.Color = Color3.fromRGB(255, 50, 50)
         
         if not blinkTween then
             blinkTween = TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.5 })
             blinkTween:Play()
         end
     else
-        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(50, 170, 90) }):Play()
-        ToggleBtn.Text = "▶  เปิดบอท"
-        Status.Text = "● ปิดอยู่"
-        Status.TextColor3 = Color3.fromRGB(200, 200, 200)
-        stroke.Color = Color3.fromRGB(200, 60, 60)
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(200, 20, 20) }):Play()
+        ToggleBtn.Text = "▶ START"
+        Status.Text = "● OFFLINE"
+        Status.TextColor3 = Color3.fromRGB(150, 150, 150)
+        stroke.Color = Color3.fromRGB(255, 30, 30)
         
         if blinkTween then
             blinkTween:Cancel()
@@ -1824,11 +1837,11 @@ end
 
 local function setSellButtonState(enabled)
     if enabled then
-        TweenService:Create(ToggleSellBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(60, 140, 200) }):Play()
-        ToggleSellBtn.Text = "💰 ขายของ: เปิด"
+        TweenService:Create(ToggleSellBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(180, 20, 20) }):Play()
+        ToggleSellBtn.Text = "💰 AUTO-SELL: ON"
     else
-        TweenService:Create(ToggleSellBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(100, 100, 100) }):Play()
-        ToggleSellBtn.Text = "💰 ขายของ: ปิด"
+        TweenService:Create(ToggleSellBtn, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(80, 80, 80) }):Play()
+        ToggleSellBtn.Text = "💰 AUTO-SELL: OFF"
     end
 end
 
@@ -1838,20 +1851,20 @@ local function updateStats()
     local h = math.floor(elapsed / 3600)
     local m = math.floor((elapsed % 3600) / 60)
     local s = elapsed % 60
-    TimeLabel.Text = string.format("⏱ เวลารัน: %02d:%02d:%02d", h, m, s)
+    TimeLabel.Text = string.format("⏱ TIME: %02d:%02d:%02d", h, m, s)
     
-    RainTotalLabel.Text = string.format("💰 เงินรวม: %s Rain", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
+    RainTotalLabel.Text = string.format("💰 RAIN: %s", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
     
     if elapsed > 0 then
         local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
-        RainHourLabel.Text = string.format("⚡ เงิน/ชั่วโมง: %s Rain/h", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
+        RainHourLabel.Text = string.format("⚡ RAIN/H: %s", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
     end
     
-    CycleLabel.Text = string.format("🏁 จบรอบ: %d รอบ", STATS.totalCycles)
+    CycleLabel.Text = string.format("🏁 CYCLES: %d", STATS.totalCycles)
     
     if STATS.avgCycleTime > 0 then
         local avgMin = STATS.avgCycleTime / 60
-        AvgTimeLabel.Text = string.format("⏳ เฉลี่ย/รอบ: %.2f นาที", avgMin)
+        AvgTimeLabel.Text = string.format("⏳ AVG/CYCLE: %.2f MIN", avgMin)
     end
 end
 
@@ -1867,14 +1880,14 @@ end)
 ToggleSellBtn.MouseButton1Click:Connect(function()
     CONFIG.ENABLE_AUTO_SELL = not CONFIG.ENABLE_AUTO_SELL
     setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-    print(string.format("[AutoQuest] ระบบขายของ: %s", CONFIG.ENABLE_AUTO_SELL and "เปิด" or "ปิด"))
+    print(string.format("[MSX HUB] AUTO-SELL: %s", CONFIG.ENABLE_AUTO_SELL and "ON" or "OFF"))
 end)
 
 ToggleBtn.MouseEnter:Connect(function()
-    if not isGuiRunning then TweenService:Create(ToggleBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(70, 200, 110) }):Play() end
+    if not isGuiRunning then TweenService:Create(ToggleBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(255, 60, 60) }):Play() end
 end)
 ToggleBtn.MouseLeave:Connect(function()
-    if not isGuiRunning then TweenService:Create(ToggleBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(50, 170, 90) }):Play() end
+    if not isGuiRunning then TweenService:Create(ToggleBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(200, 20, 20) }):Play() end
 end)
 
 local function startBot()
@@ -1890,7 +1903,7 @@ local function startBot()
     end
     
     setButtonState(true)
-    print("[AutoQuest] >>> เริ่มบอท (v10.0 ABSOLUTE) <<<")
+    print("[MSX HUB] >>> STARTED <<<")
     
     AutoDrive.canCruise = function() return true end
     
@@ -1899,10 +1912,10 @@ local function startBot()
         while _G.AutoQuestRunning do
             local currentLv = getPlayerLevel()
             cycleCount = cycleCount + 1
-            print(string.format("\n>>> รอบ Min R Lv.20 (#%d) [Lv.%d] <<<", cycleCount, currentLv))
+            print(string.format("\n>>> CYCLE Min R Lv.20 (#%d) [Lv.%d] <<<", cycleCount, currentLv))
             local ok, err = pcall(runOneQuestCycle)
             if not ok then
-                warn("[AutoQuest] เกิดข้อผิดพลาดในรอบ:", err)
+                warn("[MSX HUB] Error:", err)
                 pcall(function() AutoDrive.stop("error_recover") end)
                 task.wait(1.5)
             end
@@ -1923,7 +1936,7 @@ local function stopBot()
     if mainThread then task.cancel(mainThread) end
     pcall(function() AutoDrive.stop("user_stop") end)
     setButtonState(false)
-    print("[AutoQuest] >>> หยุดบอท <<<")
+    print("[MSX HUB] >>> STOPPED <<<")
 end
 
 ToggleBtn.MouseButton1Click:Connect(function()
@@ -1939,9 +1952,9 @@ _G.RaycityAutoQuestStop = function()
     pcall(function() AutoDrive.stop("user_stop") end)
     if blinkTween then pcall(function() blinkTween:Cancel() end) end
     pcall(function() if _G.RaycityQuestGui then _G.RaycityQuestGui:Destroy() end end)
-    print("[AutoQuest] หยุดเรียบร้อย")
+    print("[MSX HUB] หยุดเรียบร้อย")
 end
 
 setButtonState(false)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-print("[AutoQuest] GUI v10.0 ABSOLUTE พร้อม - ไร้การลบ UI, Bypass หน้าต่าง, และหยุดนิ่งสนิท 100%!")
+print("[MSX HUB] GUI Red/Black Theme Loaded. Ready to farm!")
