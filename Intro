@@ -2,12 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v20.0 FINAL)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v21.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP: Smooth Braking & Velocity Lock (ไม่มี CFrame Freeze!)
-    - ป้องกันการสะอึก/ถอยหลัง/ค้างในวง STOP 100%
-    - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ (Zero Delay)
+    - ระบบ STOP: Total Lockdown (ตัด AutoDrive & ล็อคเบรก 100% ไม่ถอยหลังเด็ดขาด!)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
+    - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
+    - ปุ่ม เปิด/ปิด การขายของ
     ====================================================================
 --]]
 
@@ -1502,25 +1502,21 @@ local function runOneQuestCycle()
         local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
         local carRoot = getCarRoot()
 
-        -- ⚡ ปรับระบบการจอดหยุด (Smooth Braking): ค่อยๆ เบรกและตัด AutoDrive ทันทีเมื่อถึงระยะ
         if activeObj.isStop and not isHoldingStopBox then
-            local arrivedAtStop = (inBox and distToTarget <= 6.0) or (distToTarget <= 3.8)
+            local arrivedAtStop = (inBox and distToTarget <= 6.0 and speedKmh < 3.0) or (distToTarget <= 3.8)
             if arrivedAtStop then
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
-                pcall(function() AutoDrive.stop("smooth_stop_at_destination") end)
-                if rcd and rcd.phys then
-                    rcd.phys.throttle = 0
-                    rcd.phys.brake = 1
-                    rcd.phys.steerIn = 0
-                    rcd.phys.v = Vector3.zero
-                    rcd.phys.w = Vector3.zero
-                end
+                pcall(function() AutoDrive.stop("stopped_at_destination") end)
             end
         end
 
+        -- ⚡ ระบบหยุดนิ่งสนิท 100% (Total Lockdown at STOP)
         if isHoldingStopBox then
-            pcall(function() AutoDrive.stop("holding_brake") end)
+            -- 🛑 สั่งหยุด AutoDrive ทุกเฟรม ป้องกันการดีดกลับ
+            pcall(function() AutoDrive.stop("holding_brake_final") end)
+            
+            -- 🛑 เหยียบเบรกและล็อคความเร็วเป็น 0 ตลอดเวลา
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
@@ -1528,9 +1524,14 @@ local function runOneQuestCycle()
                 rcd.phys.v = Vector3.zero
                 rcd.phys.w = Vector3.zero
             end
+            
+            -- 🛑 รีเซ็ตตัวแปรป้องกันการทำงานอื่นๆ แทรก
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
+            driveInactiveSince = nil
+            
+            -- 🛑 ตรวจสอบว่าจบเควสหรือยัง
             if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
@@ -1970,6 +1971,6 @@ _G.RaycityAutoQuestStop = function()
     print("[MSX HUB] หยุดเรียบร้อย")
 end
 
-setButtonState(true)
+setButtonState(false)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
 print("[MSX HUB] GUI Red/Black Theme Loaded. Ready to farm!")
