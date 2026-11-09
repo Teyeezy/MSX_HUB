@@ -2,12 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v7.0 ULTIMATE)
-    - แก้ปัญหารถถอยหลังทะลุตึก (CFrame Freeze ที่จุด STOP)
-    - เพิ่ม GUI แสดงเวลา, เงินรวม, เงิน/ชั่วโมง
-    - เพิ่ม GUI แสดงจำนวนรอบที่จบ และเวลาเฉลี่ยต่อรอบ (นับจากรับเควสถึง STOP)
-    - ลด STOP_HOLD_TIME เหลือ 1.0 วิ
-    - ลบ UIGradient ออกจากปุ่มทั้งหมด (แก้ Tween Error 100%)
+    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v9.0 FINAL)
+    - แก้ปัญหา UI ค้างหลังจบรอบ (เพิ่มระบบบังคับปิด UI)
+    - ความเร็ว 99 m/s (356 km/h) เสถียร
+    - ระบบ STOP แบบดั้งเดิม (เบรกค้าง + v=zero) ไม่มี CFrame Freeze
+    - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
+    - ปุ่ม เปิด/ปิด การขายของ (ไม่มี UIGradient ไร้ Error 100%)
     ====================================================================
 --]]
 
@@ -23,26 +23,28 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
-    CRUISE_SPEED_MPS = 125,
-    CAP1_SPEED = 100.0,
-    CAP2_SPEED = 68.0,
-    CAP3_SPEED = 34.0,
+    -- ⚡ ความเร็ว 99 m/s (356 km/h) ตามที่ต้องการ
+    CRUISE_SPEED_MPS = 99,
+    CAP1_SPEED = 82.0,
+    CAP2_SPEED = 56.0,
+    CAP3_SPEED = 28.0,
 
     ENABLE_AUTO_BOOST = true,
-    ENABLE_LANE_SWITCH = false,
     ENABLE_CORNERING_ASSIST = true,
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
 
-    LOOP_DELAY = 2.0,
-    STOP_HOLD_TIME = 1.0,
-    QUEST_FINISH_CONFIRM_TIME = 3.0,
+    -- ⏱️ ระบบ STOP แบบดั้งเดิม (รอให้เควสจบจริง)
+    LOOP_DELAY = 4.0,
+    STOP_HOLD_TIME = 3.5,
+    QUEST_FINISH_CONFIRM_TIME = 5.0,
 
     TIMEOUT_PER_CHK = 65,
     STUCK_TIME_SEC = 2.5,
     MAX_ACCEPT_RETRIES = 15,
     QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
 
+    -- ⚡ รับเควสไว
     ACCEPT_DELAY_TALK = 0.03,
     ACCEPT_DELAY_ACCEPT = 0.03,
     ACCEPT_DELAY_BOARDED = 0.03,
@@ -53,10 +55,10 @@ local CONFIG = {
     REFUEL_BEFORE_QUEST_PCT = 0.08,
     REFUEL_BEFORE_QUEST_MIN_L = 15.0,
     FUEL_STATIONS = {
-        { npcId = 800043, modelName = "Npc_1730043", name = "Ume", pos = Vector3.new(6355.40, 40.60, 9220.60) },
-        { npcId = 800045, modelName = "Npc_1730045", name = "Momo", pos = Vector3.new(13046.00, 57.20, 6115.80) },
-        { npcId = 2008,   modelName = "Npc_2008",    name = "Yuka", pos = Vector3.new(-9346.40, 28.40, -3290.80) },
-        { npcId = 90000,  modelName = "Npc_90000",   name = "D.K. 19", pos = Vector3.new(-9696.00, 29.00, -3804.80) },
+        { npcId = 800043, name = "Ume", pos = Vector3.new(6355.40, 40.60, 9220.60) },
+        { npcId = 800045, name = "Momo", pos = Vector3.new(13046.00, 57.20, 6115.80) },
+        { npcId = 2008,   name = "Yuka", pos = Vector3.new(-9346.40, 28.40, -3290.80) },
+        { npcId = 90000,  name = "D.K. 19", pos = Vector3.new(-9696.00, 29.00, -3804.80) },
     },
 
     ENABLE_AUTO_LOOT = true,
@@ -170,6 +172,40 @@ if CONFIG.ENABLE_ANTI_AFK then
                     VirtualUser:ClickButton2(Vector2.new(100, 100))
                 end)
             end
+        end
+    end)
+end
+
+-- 🛑 ฟังก์ชันบังคับเคลียร์ UI ที่ค้าง (The UI Fixer)
+local function clearQuestUI()
+    pcall(function()
+        local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if PlayerGui then
+            for _, gui in ipairs(PlayerGui:GetChildren()) do
+                if gui.Name:find("Quest") or gui.Name:find("Dialog") or gui.Name:find("Offer") or gui.Name:find("Mission") then
+                    if gui:IsA("ScreenGui") and gui.Name ~= "RaycityQuestGui" then
+                        gui.Enabled = false
+                        gui:Destroy()
+                    end
+                end
+            end
+        end
+        -- ปิด CoreGui ที่อาจจะค้าง (ถ้าเข้าถึงได้)
+        local CoreGuiObj = game:GetService("CoreGui")
+        for _, gui in ipairs(CoreGuiObj:GetChildren()) do
+            if gui.Name:find("Quest") or gui.Name:find("Dialog") then
+                pcall(function() gui:Destroy() end)
+            end
+        end
+        -- สั่งปิดผ่านฟังก์ชันของเกม (ถ้ามี)
+        local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
+        if rq and rq.talk then pcall(rq.talk, "") end 
+        local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
+        if QuestUI then
+            if QuestUI.offerShown and QuestUI.offerShown() then
+                pcall(function() QuestUI._offerAnswer(false) end)
+            end
+            if QuestUI.close then pcall(QuestUI.close) end
         end
     end)
 end
@@ -433,14 +469,14 @@ local function maintainHooks()
         if phys.throttle > 0 and phys.gear == 0 then phys.gear = 1
         elseif phys.throttle < 0 and phys.gear == 0 then phys.gear = -1 end
         if phys.p then
-            phys.p.redRpm = math.max(phys.p.redRpm or 6000, 9800)
-            phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 11500)
-            phys.p.vmax = math.max(phys.p.vmax or 100, 135)
-            phys.p.btPower = math.max(phys.p.btPower or 2.5, 4.2)
-            phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.45)
+            phys.p.redRpm = math.max(phys.p.redRpm or 6000, 9200)
+            phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 10800)
+            phys.p.vmax = math.max(phys.p.vmax or 100, 115)
+            phys.p.btPower = math.max(phys.p.btPower or 2.5, 3.8)
+            phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.35)
         end
-        phys.torqueBonus = math.max(phys.torqueBonus or 0, 750)
-        phys.gripScale = math.max(phys.gripScale or 1, 3.0)
+        phys.torqueBonus = math.max(phys.torqueBonus or 0, 550)
+        phys.gripScale = math.max(phys.gripScale or 1, 2.8)
     end
 end
 
@@ -587,7 +623,7 @@ local function tryAutoBoost()
     local phys = rcd and rcd.phys
     if not phys then return end
     if phys.boosting or phys.throttle <= 0 or phys.drift then return end
-    if math.abs(phys.steerIn or 0) > 0.32 then return end
+    if math.abs(phys.steerIn or 0) > 0.28 then return end
     local spState = EconomyRules.lastSPState
     if not spState or not spState.sp then return end
     local p = phys.p or {}
@@ -698,14 +734,14 @@ local function applyCorneringGripAssist()
     local phys = rcd and rcd.phys
     if not phys or not phys.v then return end
     if phys.p then
-        phys.p.redRpm = math.max(phys.p.redRpm or 6000, 9800)
-        phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 11500)
-        phys.p.vmax = math.max(phys.p.vmax or 100, 135)
-        phys.p.btPower = math.max(phys.p.btPower or 2.5, 4.2)
-        phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.45)
+        phys.p.redRpm = math.max(phys.p.redRpm or 6000, 9200)
+        phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 10800)
+        phys.p.vmax = math.max(phys.p.vmax or 100, 115)
+        phys.p.btPower = math.max(phys.p.btPower or 2.5, 3.8)
+        phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.35)
     end
-    phys.torqueBonus = math.max(phys.torqueBonus or 0, 750)
-    phys.gripScale = math.max(phys.gripScale or 1, 3.0)
+    phys.torqueBonus = math.max(phys.torqueBonus or 0, 550)
+    phys.gripScale = math.max(phys.gripScale or 1, 2.8)
     if not adState or not adState.active or adState.near then return end
     local path = adState.path
     if not path or not path.n or path.n < 2 or not path.len or path.len < 2 then return end
@@ -766,7 +802,7 @@ local function applyCorneringGripAssist()
     car:SetAttribute("AutoBrake", brake)
     phys.steerIn = steer
     phys.aiSteer = (math.abs(rel.X) > 0.06 or lat > 2.5 or minCos < 0.94)
-    phys.gripScale = 3.0
+    phys.gripScale = 2.8
     if speed > 2 and cosErr > 0.25 then
         local k = 0.22
         if lat > 2.0 then
@@ -1254,9 +1290,7 @@ if MXPush then
     end)
 end
 
--- ============================================================
--- ฟังก์ชันรับเควส
--- ============================================================
+-- 🛑 ฟังก์ชันรับเควส (แก้ปัญหา UI ค้าง)
 local function ensureQuestAccepted()
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
@@ -1306,6 +1340,11 @@ local function ensureQuestAccepted()
             carPos = getCarState()
             if not carPos then continue end
         end
+        
+        -- 🛑 บังคับเคลียร์ UI ที่ค้างก่อนเริ่มคุย!
+        clearQuestUI()
+        task.wait(0.1)
+
         startNpcPositionHold()
         if QuestRequest then
             pcall(function()
@@ -1349,9 +1388,6 @@ local function ensureQuestAccepted()
     return false
 end
 
--- ============================================================
--- ฟังก์ชันหลักของ 1 รอบเควส
--- ============================================================
 local function runOneQuestCycle()
     local currentLv = getPlayerLevel()
     local accepted = ensureQuestAccepted()
@@ -1360,9 +1396,7 @@ local function runOneQuestCycle()
         return
     end
     
-    -- เริ่มนับเวลาเฉพาะตอนรับเควสแล้ว
     local cycleStartTime = os.clock()
-    
     AutoDrive.C.maxSpeed = CONFIG.CRUISE_SPEED_MPS
     local currentActiveIdx, currentActiveTarget, currentActiveIsStop, currentActivePoly = nil, nil, false, nil
     local stepStartTime = os.clock()
@@ -1385,7 +1419,6 @@ local function runOneQuestCycle()
     local lastLootCheckAt = 0
     local stopEnteredAt = nil
     local questFinishedConfirmedAt = nil
-    local stopHoldCFrame = nil -- 🛑 เก็บ CFrame ตอนแตะจุด STOP
 
     while _G.AutoQuestRunning do
         task.wait(0.05)
@@ -1433,7 +1466,6 @@ local function runOneQuestCycle()
             if finishConfirmed and confirmElapsed >= 0.3 then
                 task.wait(CONFIG.STOP_HOLD_TIME)
                 
-                -- 🛑 คำนวณเวลาเฉลี่ยต่อรอบ (นับจากรับเควสถึง STOP)
                 local cycleDuration = os.clock() - cycleStartTime
                 STATS.totalCycles = STATS.totalCycles + 1
                 STATS.totalCycleTime = STATS.totalCycleTime + cycleDuration
@@ -1479,7 +1511,6 @@ local function runOneQuestCycle()
             driveInactiveSince = nil
             isHoldingStopBox = false
             stopEnteredAt = nil
-            stopHoldCFrame = nil
             local carPosCurrent = getCarState()
             local initDist = carPosCurrent and (carPosCurrent - activeObj.target).Magnitude or 999
             applyAutoDriveParams(activeObj.isStop and initDist <= 45)
@@ -1498,33 +1529,16 @@ local function runOneQuestCycle()
         local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
         local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
         local carRoot = getCarRoot()
-        
         if activeObj.isStop and not isHoldingStopBox then
             local arrivedAtStop = (inBox and distToTarget <= 6.0 and speedKmh < 3.0) or (distToTarget <= 3.8)
             if arrivedAtStop then
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
-                
-                -- 🛑 บันทึก CFrame ทันทีที่แตะจุด STOP
-                local rootNow = getCarRoot()
-                if rootNow then
-                    stopHoldCFrame = rootNow.CFrame 
-                end
             end
         end
-        
         if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
-            
-            -- 🛑 ล็อคตำแหน่งและความเร็วรถ 100%
-            local myRoot = getCarRoot()
-            if myRoot and stopHoldCFrame then
-                myRoot.CFrame = stopHoldCFrame
-                myRoot.AssemblyLinearVelocity = Vector3.zero
-                myRoot.AssemblyAngularVelocity = Vector3.zero
-            end
-            
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
@@ -1532,11 +1546,9 @@ local function runOneQuestCycle()
                 rcd.phys.v = Vector3.zero
                 rcd.phys.w = Vector3.zero
             end
-            
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
-            
             if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
@@ -1548,7 +1560,6 @@ local function runOneQuestCycle()
             task.wait(0.08)
             continue
         end
-        
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
             if distToTarget <= 50 then
                 local targetSpeedKmh
@@ -1665,7 +1676,7 @@ local function runOneQuestCycle()
 end
 
 -- ============================================================
--- 🎨 GUI สำหรับควบคุมและแสดงผล (v7.0 ULTIMATE)
+-- 🎨 GUI สำหรับควบคุมและแสดงผล
 -- ============================================================
 pcall(function()
     if _G.RaycityQuestGui then _G.RaycityQuestGui:Destroy() end
@@ -1699,7 +1710,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -20, 0, 28)
 Title.Position = UDim2.new(0, 10, 0, 10)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡ ไอ้ที AutoQuest v7.0"
+Title.Text = "⚡ ไอ้ที AutoQuest v9.0"
 Title.TextColor3 = Color3.fromRGB(255, 200, 200)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
@@ -1716,7 +1727,7 @@ Status.Font = Enum.Font.GothamBold
 Status.Parent = MainFrame
 
 local StatsFrame = Instance.new("Frame")
-StatsFrame.Size = UDim2.new(1, -20, 0, 130) -- ขยายความสูงขึ้นเพื่อใส่ 5 บรรทัด
+StatsFrame.Size = UDim2.new(1, -20, 0, 130)
 StatsFrame.Position = UDim2.new(0, 10, 0, 65)
 StatsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 StatsFrame.BorderSizePixel = 0
@@ -1910,7 +1921,7 @@ local function startBot()
     end
     
     setButtonState(true)
-    print("[AutoQuest] >>> เริ่มบอท (v7.0 ULTIMATE) <<<")
+    print("[AutoQuest] >>> เริ่มบอท (v9.0 FINAL) <<<")
     
     AutoDrive.canCruise = function() return true end
     
@@ -1964,4 +1975,4 @@ end
 
 setButtonState(false)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-print("[AutoQuest] GUI v7.0 ULTIMATE พร้อมใช้งาน! (CFrame Freeze + Stats ครบ)")
+print("[AutoQuest] GUI v9.0 FINAL พร้อม - ระบบ STOP ดั้งเดิม + แก้บั๊ก UI ค้างแล้ว!")
