@@ -2,9 +2,10 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v12.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v13.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP ล็อค CFrame 100% ไม่ถอยหลังหรือไหลแม้แต่เซ็นติเมตร
+    - ล็อค STOP นิ่งสนิท 100% ไม่ถอยหลัง
+    - บังคับเบรกทันทีที่จบรอบ ไม่ให้รถไหลไป 5 วิ
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
     - ปุ่ม เปิด/ปิด การขายของ
@@ -23,6 +24,7 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
+    -- ⚡ ความเร็ว 99 m/s
     CRUISE_SPEED_MPS = 99,
     CAP1_SPEED = 82.0,
     CAP2_SPEED = 56.0,
@@ -33,7 +35,8 @@ local CONFIG = {
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
 
-    LOOP_DELAY = 4.0,
+    -- ⏱️ ลดเวลารอวนรอบให้เร็วที่สุด
+    LOOP_DELAY = 0.1,
     STOP_HOLD_TIME = 3.5,
     QUEST_FINISH_CONFIRM_TIME = 5.0,
 
@@ -42,6 +45,7 @@ local CONFIG = {
     MAX_ACCEPT_RETRIES = 15,
     QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
 
+    -- ⚡ รับเควสไว
     ACCEPT_DELAY_TALK = 0.03,
     ACCEPT_DELAY_ACCEPT = 0.03,
     ACCEPT_DELAY_BOARDED = 0.03,
@@ -578,7 +582,7 @@ end
 
 local lastBoostCmdAt = 0
 local isHoldingStopBox = false
-local stopHoldCFrame = nil -- เก็บ CFrame ตอนแตะจุด STOP
+local stopHoldCFrame = nil
 
 local function tryAutoBoost()
     if not CONFIG.ENABLE_AUTO_BOOST or isHoldingStopBox then return end
@@ -1509,7 +1513,6 @@ local function runOneQuestCycle()
                 stopEnteredAt = os.clock()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
                 
-                -- 🛑 เก็บ CFrame ตอนแตะจุด STOP
                 local rootNow = getCarRoot()
                 if rootNow then
                     stopHoldCFrame = rootNow.CFrame
@@ -1519,7 +1522,6 @@ local function runOneQuestCycle()
         if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
             
-            -- 🛑 ล็อค CFrame ให้หยุดนิ่งสนิท 100%
             local myRoot = getCarRoot()
             if myRoot and stopHoldCFrame then
                 myRoot.CFrame = stopHoldCFrame
@@ -1650,15 +1652,26 @@ local function runOneQuestCycle()
         end
     end
     AutoDrive.stop(questStateRecoveryRequested and "quest_state_lost" or "quest_done")
-    task.wait(0.3)
+    
+    -- 🛑 บังคับเบรกและล็อคความเร็วทันทีที่จบรอบ
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = 0
+        rcd.phys.brake = 1
+        rcd.phys.steerIn = 0
+        rcd.phys.v = Vector3.zero
+        rcd.phys.w = Vector3.zero
+    end
+
+    task.wait(0.1)
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
         ensureFuelReady(true)
     end
     if questStateRecoveryRequested then
-        task.wait(1.0)
+        task.wait(0.5)
     else
-        task.wait(CONFIG.LOOP_DELAY)
+        task.wait(0.1)
     end
     claimAllDropsAndSellInventory()
 end
