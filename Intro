@@ -4,7 +4,7 @@ repeat task.wait(6) until game:IsLoaded()
     ====================================================================
     MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v16.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP: ล็อคเบรกค้างไว้ 100% ไม่ปล่อยจนจบรอบ ไม่ถอยหลัง (Fix จังหวะถอยๆ หยุดๆ)
+    - ระบบ STOP: ล็อคเบรกค้างไว้ 100% ไม่ปล่อยจนจบรอบ ไม่ถอยหลัง
     - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ทันที (Zero Delay)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
@@ -1395,7 +1395,7 @@ local function runOneQuestCycle()
     local lastLootCheckAt = 0
     local stopEnteredAt = nil
     local questFinishedConfirmedAt = nil
-    local isCycleFinished = false
+    local isCycleFinished = false -- 🛑 ตัวแปรล็อคเบรก
 
     while _G.AutoQuestRunning do
         task.wait(0.05)
@@ -1403,9 +1403,8 @@ local function runOneQuestCycle()
         applyCorneringGripAssist()
         maintainHooks()
         
-        -- 🛑 [จุดแก้ไข] บังคับล็อคเบรกค้างไว้ 100% ทันทีเมื่อจบรอบ ไม่ปล่อยจนกว่าจะขึ้นรอบใหม่
+        -- 🛑 ถ้าจบรอบแล้ว ให้ล็อคเบรกค้างไว้จนกว่าจะเริ่มรอบใหม่
         if isCycleFinished then
-            pcall(function() AutoDrive.stop("locked_stop") end)
             local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
@@ -1413,11 +1412,6 @@ local function runOneQuestCycle()
                 rcd.phys.steerIn = 0
                 rcd.phys.v = Vector3.zero
                 rcd.phys.w = Vector3.zero
-            end
-            local carRoot = getCarRoot()
-            if carRoot then
-                carRoot.AssemblyLinearVelocity = Vector3.zero
-                carRoot.AssemblyAngularVelocity = Vector3.zero
             end
             task.wait(0.08)
             continue
@@ -1462,7 +1456,7 @@ local function runOneQuestCycle()
             end
             local confirmElapsed = os.clock() - questFinishedConfirmedAt
             if finishConfirmed and confirmElapsed >= 0.3 then
-                isCycleFinished = true
+                isCycleFinished = true -- 🛑 ล็อคเบรก
                 task.wait(CONFIG.STOP_HOLD_TIME)
                 
                 local cycleDuration = os.clock() - cycleStartTime
@@ -1474,7 +1468,7 @@ local function runOneQuestCycle()
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
                 questStateRecoveryRequested = true
-                isCycleFinished = true
+                isCycleFinished = true -- 🛑 ล็อคเบรก
                 break
             end
             task.wait(0.15)
@@ -1484,7 +1478,7 @@ local function runOneQuestCycle()
         questFinishedConfirmedAt = nil
 
         if st.state ~= "running" and st.state ~= "boarding" then
-            isCycleFinished = true
+            isCycleFinished = true -- 🛑 ล็อคเบรก
             task.wait(CONFIG.STOP_HOLD_TIME)
             break
         end
@@ -1546,10 +1540,6 @@ local function runOneQuestCycle()
                 rcd.phys.steerIn = 0
                 rcd.phys.v = Vector3.zero
                 rcd.phys.w = Vector3.zero
-            end
-            if carRoot then
-                carRoot.AssemblyLinearVelocity = Vector3.zero
-                carRoot.AssemblyAngularVelocity = Vector3.zero
             end
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
@@ -1668,7 +1658,7 @@ local function runOneQuestCycle()
     end
     AutoDrive.stop(questStateRecoveryRequested and "quest_state_lost" or "quest_done")
     
-    -- 🛑 บังคับล็อคเบรกและล้างค่าความเร็วของรถเพื่อไม่ให้ขยับต่อ
+    -- 🛑 บังคับเบรกและล็อคความเร็วทันทีที่จบรอบ
     local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
     if rcd and rcd.phys then
         rcd.phys.throttle = 0
@@ -1676,11 +1666,6 @@ local function runOneQuestCycle()
         rcd.phys.steerIn = 0
         rcd.phys.v = Vector3.zero
         rcd.phys.w = Vector3.zero
-    end
-    local carRoot = getCarRoot()
-    if carRoot then
-        carRoot.AssemblyLinearVelocity = Vector3.zero
-        carRoot.AssemblyAngularVelocity = Vector3.zero
     end
 
     task.wait(0.1)
