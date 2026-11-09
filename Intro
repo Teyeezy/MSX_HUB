@@ -2,11 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v6.0 ULTIMATE)
-    - รวมทุกระบบไว้ในไฟล์เดียว (Auto Quest + UI + Stats + Auto-Sell)
-    - ลด STOP_HOLD_TIME เหลือ 1.0 วิ ป้องกันรถถอยหลัง
+    Raycity RB - Auto Quest Bot (Min R / Lv.20 Party Taxi v7.0 ULTIMATE)
+    - แก้ปัญหารถถอยหลังทะลุตึก (CFrame Freeze ที่จุด STOP)
     - เพิ่ม GUI แสดงเวลา, เงินรวม, เงิน/ชั่วโมง
-    - เพิ่มปุ่ม เปิด/ปิด การขายของ (Auto-Sell Toggle)
+    - เพิ่ม GUI แสดงจำนวนรอบที่จบ และเวลาเฉลี่ยต่อรอบ (นับจากรับเควสถึง STOP)
+    - ลด STOP_HOLD_TIME เหลือ 1.0 วิ
     - ลบ UIGradient ออกจากปุ่มทั้งหมด (แก้ Tween Error 100%)
     ====================================================================
 --]]
@@ -33,9 +33,6 @@ local CONFIG = {
     ENABLE_CORNERING_ASSIST = true,
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
-    LANE_DETECT_DIST = 35,
-    LANE_SIDE_DETECT_DIST = 2,
-    LANE_SWITCH_COOLDOWN = 1.0,
 
     LOOP_DELAY = 2.0,
     STOP_HOLD_TIME = 1.0,
@@ -65,7 +62,6 @@ local CONFIG = {
     ENABLE_AUTO_LOOT = true,
     ENABLE_AUTO_SELL = true,
     SELL_BOUND_ITEMS = true,
-    PROTECT_ALL_MONEY_BOXES = true,
     KEEP_ITEM_IDS = {
         [13746] = true, [12717] = true, [12765] = true, [12815] = true, [12816] = true,
         [13230] = true, [13231] = true, [13380] = true, [13835] = true, [14385] = true,
@@ -84,7 +80,6 @@ local CONFIG = {
         "Voucher", "Lucky Red Sock", "Lucky Blue Sock", "Lucky Yellow Sock", "Sock",
         "ถุงเท้า", "คุณป้าแห่งความสุข", "Dr.Kim", "Golgol",
     },
-
     ENABLE_MINIMIZE_FIX = true,
 }
 
@@ -92,7 +87,10 @@ local CONFIG = {
 local STATS = {
     totalRain = 0,
     startTime = nil,
-    isRunning = false
+    isRunning = false,
+    totalCycles = 0,
+    totalCycleTime = 0,
+    avgCycleTime = 0
 }
 
 _G.AutoQuestRunning = false
@@ -114,9 +112,6 @@ local function getPlayerLevel()
     return 1
 end
 
--- ============================================================
--- โหลดโมดูลเกม
--- ============================================================
 local RBRCQuest = ReplicatedStorage:WaitForChild("RBRCQuest", 10)
 if not RBRCQuest then warn("[AutoQuest] Error: ไม่พบ RBRCQuest"); return end
 local Remotes = RBRCQuest:WaitForChild("Remotes", 10)
@@ -158,9 +153,6 @@ pcall(function()
     MatchGeom = require(ReplicatedStorage:WaitForChild("RBRCMatch"):WaitForChild("MatchGeom"))
 end)
 
--- ============================================================
--- ระบบเสริม (Anti-AFK, AutoDrive, Cornering)
--- ============================================================
 if CONFIG.ENABLE_ANTI_AFK then
     local VirtualUser = game:GetService("VirtualUser")
     pcall(function()
@@ -261,9 +253,6 @@ local function isCarInsidePoly(polyRaw, carPos)
     return inside
 end
 
--- ============================================================
--- Noclip / Bypass ระบบชน
--- ============================================================
 local dummyHook = function() end
 local dummyHookFalse = function() return false end
 
@@ -455,9 +444,6 @@ local function maintainHooks()
     end
 end
 
--- ============================================================
--- ระบบดึงตำแหน่งรถและ NPC
--- ============================================================
 local function getCarRoot()
     local car = workspace:FindFirstChild("MyCar")
     if not car then return nil end
@@ -565,9 +551,6 @@ local function parseVector3(val)
     return nil
 end
 
--- ============================================================
--- ระบบเทอร์โบและเกาะถนน
--- ============================================================
 local cachedBoostFn = nil
 local function getBoostFn()
     if cachedBoostFn then return cachedBoostFn end
@@ -1001,9 +984,6 @@ local function driveToNpcSmooth(timeout)
     return false
 end
 
--- ============================================================
--- ระบบน้ำมันและของดรอป
--- ============================================================
 local function getFuelInfo()
     local fuel, cap = nil, nil
     pcall(function()
@@ -1207,7 +1187,7 @@ local function sellAllInventoryItems()
                     if res and res.ok then
                         soldCount = soldCount + countToSell
                         totalRainEarned = totalRainEarned + (tonumber(res.total) or 0)
-                        STATS.totalRain = STATS.totalRain + (tonumber(res.total) or 0) -- อัปเดตเงินเข้า Stats
+                        STATS.totalRain = STATS.totalRain + (tonumber(res.total) or 0)
                     end
                 end
             end
@@ -1275,7 +1255,7 @@ if MXPush then
 end
 
 -- ============================================================
--- ระบบรับเควสและรันลูป
+-- ฟังก์ชันรับเควส
 -- ============================================================
 local function ensureQuestAccepted()
     claimAllDropsAndSellInventory()
@@ -1369,6 +1349,9 @@ local function ensureQuestAccepted()
     return false
 end
 
+-- ============================================================
+-- ฟังก์ชันหลักของ 1 รอบเควส
+-- ============================================================
 local function runOneQuestCycle()
     local currentLv = getPlayerLevel()
     local accepted = ensureQuestAccepted()
@@ -1376,6 +1359,10 @@ local function runOneQuestCycle()
         task.wait(2.0)
         return
     end
+    
+    -- เริ่มนับเวลาเฉพาะตอนรับเควสแล้ว
+    local cycleStartTime = os.clock()
+    
     AutoDrive.C.maxSpeed = CONFIG.CRUISE_SPEED_MPS
     local currentActiveIdx, currentActiveTarget, currentActiveIsStop, currentActivePoly = nil, nil, false, nil
     local stepStartTime = os.clock()
@@ -1398,6 +1385,8 @@ local function runOneQuestCycle()
     local lastLootCheckAt = 0
     local stopEnteredAt = nil
     local questFinishedConfirmedAt = nil
+    local stopHoldCFrame = nil -- 🛑 เก็บ CFrame ตอนแตะจุด STOP
+
     while _G.AutoQuestRunning do
         task.wait(0.05)
         tryAutoBoost()
@@ -1443,6 +1432,14 @@ local function runOneQuestCycle()
             local confirmElapsed = os.clock() - questFinishedConfirmedAt
             if finishConfirmed and confirmElapsed >= 0.3 then
                 task.wait(CONFIG.STOP_HOLD_TIME)
+                
+                -- 🛑 คำนวณเวลาเฉลี่ยต่อรอบ (นับจากรับเควสถึง STOP)
+                local cycleDuration = os.clock() - cycleStartTime
+                STATS.totalCycles = STATS.totalCycles + 1
+                STATS.totalCycleTime = STATS.totalCycleTime + cycleDuration
+                STATS.avgCycleTime = STATS.totalCycleTime / STATS.totalCycles
+                print(string.format("[AutoQuest] รอบที่ %d ใช้เวลา %.2f วินาที (เฉลี่ย %.2f วิ/รอบ)", STATS.totalCycles, cycleDuration, STATS.avgCycleTime))
+                
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
                 questStateRecoveryRequested = true
@@ -1482,6 +1479,7 @@ local function runOneQuestCycle()
             driveInactiveSince = nil
             isHoldingStopBox = false
             stopEnteredAt = nil
+            stopHoldCFrame = nil
             local carPosCurrent = getCarState()
             local initDist = carPosCurrent and (carPosCurrent - activeObj.target).Magnitude or 999
             applyAutoDriveParams(activeObj.isStop and initDist <= 45)
@@ -1500,36 +1498,57 @@ local function runOneQuestCycle()
         local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
         local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
         local carRoot = getCarRoot()
+        
         if activeObj.isStop and not isHoldingStopBox then
             local arrivedAtStop = (inBox and distToTarget <= 6.0 and speedKmh < 3.0) or (distToTarget <= 3.8)
             if arrivedAtStop then
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
+                
+                -- 🛑 บันทึก CFrame ทันทีที่แตะจุด STOP
+                local rootNow = getCarRoot()
+                if rootNow then
+                    stopHoldCFrame = rootNow.CFrame 
+                end
             end
         end
+        
         if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
+            
+            -- 🛑 ล็อคตำแหน่งและความเร็วรถ 100%
+            local myRoot = getCarRoot()
+            if myRoot and stopHoldCFrame then
+                myRoot.CFrame = stopHoldCFrame
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end
+            
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
                 rcd.phys.steerIn = 0
-                rcd.phys.v = Vector3.zero -- ล็อคความเร็วเป็น 0 ป้องกันรถถอยหลัง
+                rcd.phys.v = Vector3.zero
                 rcd.phys.w = Vector3.zero
             end
+            
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
-            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 2.0) then
+            
+            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
-                    task.wait(CONFIG.STOP_HOLD_TIME)
+                    if rcd and rcd.phys then rcd.phys.brake = 0 end
+                    task.wait(0.2)
                     break
                 end
             end
             task.wait(0.08)
             continue
         end
+        
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
             if distToTarget <= 50 then
                 local targetSpeedKmh
@@ -1646,7 +1665,7 @@ local function runOneQuestCycle()
 end
 
 -- ============================================================
--- 🎨 GUI สำหรับควบคุมและแสดงผล (v6.0)
+-- 🎨 GUI สำหรับควบคุมและแสดงผล (v7.0 ULTIMATE)
 -- ============================================================
 pcall(function()
     if _G.RaycityQuestGui then _G.RaycityQuestGui:Destroy() end
@@ -1659,8 +1678,8 @@ ScreenGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 _G.RaycityQuestGui = ScreenGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 290)
-MainFrame.Position = UDim2.new(0, 20, 0.5, -145)
+MainFrame.Size = UDim2.new(0, 300, 0, 340)
+MainFrame.Position = UDim2.new(0, 20, 0.5, -170)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -1680,7 +1699,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -20, 0, 28)
 Title.Position = UDim2.new(0, 10, 0, 10)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡ ไอ้ที AutoQuest v6.0"
+Title.Text = "⚡ ไอ้ที AutoQuest v7.0"
 Title.TextColor3 = Color3.fromRGB(255, 200, 200)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
@@ -1697,7 +1716,7 @@ Status.Font = Enum.Font.GothamBold
 Status.Parent = MainFrame
 
 local StatsFrame = Instance.new("Frame")
-StatsFrame.Size = UDim2.new(1, -20, 0, 80)
+StatsFrame.Size = UDim2.new(1, -20, 0, 130) -- ขยายความสูงขึ้นเพื่อใส่ 5 บรรทัด
 StatsFrame.Position = UDim2.new(0, 10, 0, 65)
 StatsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 StatsFrame.BorderSizePixel = 0
@@ -1740,9 +1759,31 @@ RainHourLabel.Font = Enum.Font.GothamSemibold
 RainHourLabel.TextXAlignment = Enum.TextXAlignment.Left
 RainHourLabel.Parent = StatsFrame
 
+local CycleLabel = Instance.new("TextLabel")
+CycleLabel.Size = UDim2.new(1, -20, 0, 20)
+CycleLabel.Position = UDim2.new(0, 10, 0, 74)
+CycleLabel.BackgroundTransparency = 1
+CycleLabel.Text = "🏁 จบรอบ: 0 รอบ"
+CycleLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+CycleLabel.TextScaled = true
+CycleLabel.Font = Enum.Font.GothamSemibold
+CycleLabel.TextXAlignment = Enum.TextXAlignment.Left
+CycleLabel.Parent = StatsFrame
+
+local AvgTimeLabel = Instance.new("TextLabel")
+AvgTimeLabel.Size = UDim2.new(1, -20, 0, 20)
+AvgTimeLabel.Position = UDim2.new(0, 10, 0, 96)
+AvgTimeLabel.BackgroundTransparency = 1
+AvgTimeLabel.Text = "⏳ เฉลี่ย/รอบ: 0.0 นาที"
+AvgTimeLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+AvgTimeLabel.TextScaled = true
+AvgTimeLabel.Font = Enum.Font.GothamSemibold
+AvgTimeLabel.TextXAlignment = Enum.TextXAlignment.Left
+AvgTimeLabel.Parent = StatsFrame
+
 local ToggleSellBtn = Instance.new("TextButton")
 ToggleSellBtn.Size = UDim2.new(1, -20, 0, 35)
-ToggleSellBtn.Position = UDim2.new(0, 10, 0, 155)
+ToggleSellBtn.Position = UDim2.new(0, 10, 0, 205)
 ToggleSellBtn.BackgroundColor3 = Color3.fromRGB(60, 140, 200)
 ToggleSellBtn.Text = "💰 ขายของ: เปิด"
 ToggleSellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1825,6 +1866,13 @@ local function updateStats()
         local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
         RainHourLabel.Text = string.format("⚡ เงิน/ชั่วโมง: %s Rain/h", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", ""))
     end
+    
+    CycleLabel.Text = string.format("🏁 จบรอบ: %d รอบ", STATS.totalCycles)
+    
+    if STATS.avgCycleTime > 0 then
+        local avgMin = STATS.avgCycleTime / 60
+        AvgTimeLabel.Text = string.format("⏳ เฉลี่ย/รอบ: %.2f นาที", avgMin)
+    end
 end
 
 task.spawn(function()
@@ -1862,7 +1910,7 @@ local function startBot()
     end
     
     setButtonState(true)
-    print("[AutoQuest] >>> เริ่มบอท (v6.0) <<<")
+    print("[AutoQuest] >>> เริ่มบอท (v7.0 ULTIMATE) <<<")
     
     AutoDrive.canCruise = function() return true end
     
@@ -1916,4 +1964,4 @@ end
 
 setButtonState(false)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
-print("[AutoQuest] GUI v6.0 พร้อม - มี Stats + ปุ่มเปิดปิดขายของ + ระบบหลักครบถ้วน!")
+print("[AutoQuest] GUI v7.0 ULTIMATE พร้อมใช้งาน! (CFrame Freeze + Stats ครบ)")
