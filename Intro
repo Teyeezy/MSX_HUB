@@ -2,12 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v11.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v12.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP ล็อคเบรกและความเร็ว 100% ไม่ถอยหลัง
+    - ระบบ STOP ล็อค CFrame 100% ไม่ถอยหลังหรือไหลแม้แต่เซ็นติเมตร
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
-    - ปุ่ม เปิด/ปิด การขายของ (ไม่มี UIGradient ไร้ Error)
+    - ปุ่ม เปิด/ปิด การขายของ
     ====================================================================
 --]]
 
@@ -23,7 +23,6 @@ local CONFIG = {
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
 
-    -- ⚡ ความเร็ว 99 m/s (356 km/h)
     CRUISE_SPEED_MPS = 99,
     CAP1_SPEED = 82.0,
     CAP2_SPEED = 56.0,
@@ -34,7 +33,6 @@ local CONFIG = {
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
 
-    -- ⏱️ ระบบ STOP แบบดั้งเดิม (รอให้เควสจบจริง)
     LOOP_DELAY = 4.0,
     STOP_HOLD_TIME = 3.5,
     QUEST_FINISH_CONFIRM_TIME = 5.0,
@@ -44,12 +42,11 @@ local CONFIG = {
     MAX_ACCEPT_RETRIES = 15,
     QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
 
-    -- ⚡ รับเควสไว
     ACCEPT_DELAY_TALK = 0.03,
     ACCEPT_DELAY_ACCEPT = 0.03,
     ACCEPT_DELAY_BOARDED = 0.03,
-    ACCEPT_POLL_INTERVAL = 0.02, -- เร็วขึ้น!
-    ACCEPT_POLL_MAX = 50,        -- รัวขึ้น!
+    ACCEPT_POLL_INTERVAL = 0.02,
+    ACCEPT_POLL_MAX = 50,
 
     ENABLE_AUTO_REFUEL = true,
     REFUEL_BEFORE_QUEST_PCT = 0.08,
@@ -85,7 +82,6 @@ local CONFIG = {
     ENABLE_MINIMIZE_FIX = true,
 }
 
--- ตัวแปรสำหรับ Stats
 local STATS = {
     totalRain = 0,
     startTime = nil,
@@ -104,7 +100,6 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 
 local function getPlayerLevel()
@@ -583,6 +578,8 @@ end
 
 local lastBoostCmdAt = 0
 local isHoldingStopBox = false
+local stopHoldCFrame = nil -- เก็บ CFrame ตอนแตะจุด STOP
+
 local function tryAutoBoost()
     if not CONFIG.ENABLE_AUTO_BOOST or isHoldingStopBox then return end
     if os.clock() - lastBoostCmdAt < 0.2 then return end
@@ -1257,7 +1254,6 @@ if MXPush then
     end)
 end
 
--- 🛑 ฟังก์ชันรับเควส (Bypass หน้าต่างแบบรัวๆ ไม่ค้าง)
 local function ensureQuestAccepted()
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
@@ -1325,13 +1321,11 @@ local function ensureQuestAccepted()
         local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
         if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
         
-        -- บังคับตอบรับเควสทันที
         local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
         
         for waitStep = 1, CONFIG.ACCEPT_POLL_MAX do
             task.wait(CONFIG.ACCEPT_POLL_INTERVAL)
             
-            -- 1. ลองกดปุ่มตกลงผ่าน API ของตัวเกม
             if QuestUI then
                 if QuestUI.offerShown and QuestUI.offerShown() then
                     pcall(function() QuestUI._offerAnswer(true) end)
@@ -1341,7 +1335,6 @@ local function ensureQuestAccepted()
                 end
             end
 
-            -- 2. ลองใช้ VirtualUser กดปุ่ม Enter
             pcall(function()
                 VirtualUser:CaptureController()
                 VirtualUser:ClickButton1(Vector2.new(500, 500))
@@ -1515,10 +1508,25 @@ local function runOneQuestCycle()
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
                 pcall(function() AutoDrive.stop("stopped_at_destination") end)
+                
+                -- 🛑 เก็บ CFrame ตอนแตะจุด STOP
+                local rootNow = getCarRoot()
+                if rootNow then
+                    stopHoldCFrame = rootNow.CFrame
+                end
             end
         end
         if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
+            
+            -- 🛑 ล็อค CFrame ให้หยุดนิ่งสนิท 100%
+            local myRoot = getCarRoot()
+            if myRoot and stopHoldCFrame then
+                myRoot.CFrame = stopHoldCFrame
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end
+
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
