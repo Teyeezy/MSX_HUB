@@ -2,12 +2,10 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v18.0)
-    - ใช้ Fluent UI (Stable & Beautiful)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v18.1)
+    - ใช้ Rayfield UI (Stable & Beautiful)
     - ระบบ STOP: Aggressive Braking (ไม่มี CFrame Freeze เด็ดขาด!)
     - บังคับเบรกและล็อคความเร็วทุกเฟรม ไม่ถอยหลังหรือไหล
-    - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ทันที (Zero Delay)
-    - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     ====================================================================
 --]]
 
@@ -17,9 +15,9 @@ if _G.RaycityAutoQuestStop then
 end
 
 -- ============================================================
--- 🎨 Fluent UI (Stable Version)
+-- 🎨 Rayfield UI (Stable Version)
 -- ============================================================
-local Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Init.lua"))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local CONFIG = {
     QUEST_ID = "S105",
@@ -1669,28 +1667,33 @@ local function runOneQuestCycle()
 end
 
 -- ============================================================
--- 🎨 Fluent UI (Stable Version)
+-- 🎨 Rayfield UI (Stable Version)
 -- ============================================================
-local Window = Fluent:CreateWindow({
-    Title = "MSX HUB",
-    SubTitle = "Raycity RB - Auto Quest",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(500, 320),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.RightControl
+local Window = Rayfield:CreateWindow({
+   Name = "MSX HUB | Raycity RB",
+   LoadingTitle = "MSX HUB",
+   LoadingSubtitle = "by ไอ้ที",
+   ConfigurationSaving = {
+      Enabled = false,
+      FolderName = nil,
+      FileName = "MSXHUB"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "",
+      RememberJoins = true
+   },
+   KeySystem = false,
 })
 
-local Tabs = {
-    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
-}
+local MainTab = Window:CreateTab("Main", nil)
+local SettingsTab = Window:CreateTab("Settings", nil)
 
-local MainGroup = Tabs.Main:AddLeftGroupbox("Controls")
-MainGroup:AddButton({
-    Title = "Start Bot",
-    Description = "เริ่มต้นบอท",
-    Callback = function()
+local MainSection = MainTab:CreateSection("Controls")
+
+local StartBtn = MainTab:CreateButton({
+   Name = "Start Bot",
+   Callback = function()
         if isGuiRunning then return end
         isGuiRunning = true
         _G.AutoQuestRunning = true
@@ -1722,13 +1725,12 @@ MainGroup:AddButton({
             pcall(function() AutoDrive.stop("exit") end)
             isGuiRunning = false
         end)
-    end
+   end,
 })
 
-MainGroup:AddButton({
-    Title = "Stop Bot",
-    Description = "หยุดบอท",
-    Callback = function()
+local StopBtn = MainTab:CreateButton({
+   Name = "Stop Bot",
+   Callback = function()
         if not isGuiRunning then return end
         _G.AutoQuestRunning = false
         isRunning = false
@@ -1737,26 +1739,28 @@ MainGroup:AddButton({
         if mainThread then task.cancel(mainThread) end
         pcall(function() AutoDrive.stop("user_stop") end)
         print("[MSX HUB] >>> STOPPED <<<")
-    end
+   end,
 })
 
-local StatsGroup = Tabs.Main:AddRightGroupbox("Statistics")
-StatsGroup:AddLabel("⏱ TIME: 00:00:00"):SetTitle("TimeLabel")
-StatsGroup:AddLabel("💰 RAIN: 0"):SetTitle("RainTotalLabel")
-StatsGroup:AddLabel("⚡ RAIN/H: 0"):SetTitle("RainHourLabel")
-StatsGroup:AddLabel("🏁 CYCLES: 0"):SetTitle("CycleLabel")
-StatsGroup:AddLabel("⏳ AVG/CYCLE: 0.0 MIN"):SetTitle("AvgTimeLabel")
+local StatsSection = MainTab:CreateSection("Statistics")
 
-local ToggleSell = Tabs.Settings:AddToggle("AutoSell", {
-    Title = "Auto Sell",
-    Default = true,
-    Callback = function(value)
-        CONFIG.ENABLE_AUTO_SELL = value
-        print(string.format("[MSX HUB] AUTO-SELL: %s", value and "ON" or "OFF"))
-    end
+local TimeLabel = MainTab:CreateLabel("⏱ TIME: 00:00:00")
+local RainTotalLabel = MainTab:CreateLabel("💰 RAIN: 0")
+local RainHourLabel = MainTab:CreateLabel("⚡ RAIN/H: 0")
+local CycleLabel = MainTab:CreateLabel("🏁 CYCLES: 0")
+local AvgTimeLabel = MainTab:CreateLabel("⏳ AVG/CYCLE: 0.0 MIN")
+
+local SettingsSection = SettingsTab:CreateSection("Settings")
+
+local ToggleSell = SettingsTab:CreateToggle({
+   Name = "Auto Sell",
+   CurrentValue = true,
+   Flag = "AutoSell",
+   Callback = function(Value)
+        CONFIG.ENABLE_AUTO_SELL = Value
+        print(string.format("[MSX HUB] AUTO-SELL: %s", Value and "ON" or "OFF"))
+   end,
 })
-
-ToggleSell:SetValue(true)
 
 local function updateStats()
     if not STATS.startTime then return end
@@ -1765,32 +1769,20 @@ local function updateStats()
     local m = math.floor((elapsed % 3600) / 60)
     local s = elapsed % 60
     
-    pcall(function()
-        if Fluent and Fluent.Tabs and Fluent.Tabs.Main then
-            local elements = Fluent.Tabs.Main.Elements
-            if elements then
-                for _, elem in pairs(elements) do
-                    if elem.Type == "Label" and elem.Title == "TimeLabel" then
-                        elem:SetText(string.format("⏱ TIME: %02d:%02d:%02d", h, m, s))
-                    elseif elem.Type == "Label" and elem.Title == "RainTotalLabel" then
-                        elem:SetText(string.format("💰 RAIN: %s", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
-                    elseif elem.Type == "Label" and elem.Title == "RainHourLabel" then
-                        if elapsed > 0 then
-                            local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
-                            elem:SetText(string.format("⚡ RAIN/H: %s", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
-                        end
-                    elseif elem.Type == "Label" and elem.Title == "CycleLabel" then
-                        elem:SetText(string.format("🏁 CYCLES: %d", STATS.totalCycles))
-                    elseif elem.Type == "Label" and elem.Title == "AvgTimeLabel" then
-                        if STATS.avgCycleTime > 0 then
-                            local avgMin = STATS.avgCycleTime / 60
-                            elem:SetText(string.format("⏳ AVG/CYCLE: %.2f MIN", avgMin))
-                        end
-                    end
-                end
-            end
-        end
-    end)
+    TimeLabel:Set(string.format("⏱ TIME: %02d:%02d:%02d", h, m, s))
+    RainTotalLabel:Set(string.format("💰 RAIN: %s", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
+    
+    if elapsed > 0 then
+        local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
+        RainHourLabel:Set(string.format("⚡ RAIN/H: %s", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
+    end
+    
+    CycleLabel:Set(string.format("🏁 CYCLES: %d", STATS.totalCycles))
+    
+    if STATS.avgCycleTime > 0 then
+        local avgMin = STATS.avgCycleTime / 60
+        AvgTimeLabel:Set(string.format("⏳ AVG/CYCLE: %.2f MIN", avgMin))
+    end
 end
 
 task.spawn(function()
@@ -1809,7 +1801,8 @@ _G.RaycityAutoQuestStop = function()
     STATS.isRunning = false
     if mainThread then pcall(function() task.cancel(mainThread) end) end
     pcall(function() AutoDrive.stop("user_stop") end)
+    pcall(function() Rayfield:Destroy() end)
     print("[MSX HUB] หยุดเรียบร้อย")
 end
 
-print("[MSX HUB] GUI Fluent Theme Loaded. Ready to farm!")
+print("[MSX HUB] GUI Rayfield Theme Loaded. Ready to farm!")
