@@ -1,7 +1,7 @@
 repeat task.wait(6) until game:IsLoaded()
 --[[
     ====================================================================
-    Raycity RB - Auto Quest Bot (Phase 2 Min R Only - Fixed v2.0)
+    Raycity RB - Auto Quest Bot (Min R / S105 + Sister Miran Driving Logic)
     ====================================================================
 --]]
 
@@ -11,24 +11,23 @@ if _G.RaycityAutoQuestStop then
 end
 
 local CONFIG = {
-    PHASE2_MAX_LEVEL = 30,
     QUEST_ID = "S105",
     NPC_ID = "mission24:105",
     NPC_NAME = "Npc_940105",
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
     
-    CRUISE_SPEED_MPS = 130,              -- ปรับความเร็วเพิ่มเป็น ~468 km/h
-    ENABLE_AUTO_BOOST = true,            
-    ENABLE_LANE_SWITCH = false,          
-    ENABLE_CORNERING_ASSIST = true,      
-    ENABLE_ANTI_AFK = true,              
-    ENABLE_AUTO_THRILL = true,           
-    LOOP_DELAY = 0.1,                    
+    CRUISE_SPEED_MPS = 99,               -- ความเร็วมาตรฐานตามไฟล์ต้นแบบ (~349.2 km/h)[cite: 5]
+    ENABLE_AUTO_BOOST = true,            -- เปิดระบบกดเทอร์โบอัตโนมัติบนทางตรง[cite: 5]
+    ENABLE_LANE_SWITCH = false,          -- ปิดสไลด์ข้าง ป้องกันรถสะบัด[cite: 5]
+    ENABLE_CORNERING_ASSIST = true,      -- เปิดระบบช่วยเกาะถนน ดูดซับแรงไถลไม่ให้หลุดโค้ง[cite: 5]
+    ENABLE_ANTI_AFK = true,              -- ป้องกันหลุด AFK 20 นาที[cite: 5]
+    ENABLE_AUTO_THRILL = true,           -- ส่งแต้ม Thrill อัตโนมัติ[cite: 5]
+    LOOP_DELAY = 0.2,                    -- พักรอบ 0.2 วินาที[cite: 5]
     TIMEOUT_PER_CHK = 65,                
-    STUCK_TIME_SEC = 2.0,                
-    MAX_ACCEPT_RETRIES = 25,             
-    QUEST_STATE_UNKNOWN_TIMEOUT = 12.0,  -- แก้บัคตัดลูปวนเควสซ้ำ
+    STUCK_TIME_SEC = 2.5,                
+    MAX_ACCEPT_RETRIES = 15,             
+    QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,   
 
     ENABLE_AUTO_REFUEL = true,           
     REFUEL_BEFORE_QUEST_PCT = 0.08,      
@@ -57,7 +56,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- GUI ON/OFF
+-- GUI ON/OFF Button
 pcall(function()
     local oldGui = game:GetService("CoreGui"):FindFirstChild("RaycityFarmGui") or LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("RaycityFarmGui")
     if oldGui then oldGui:Destroy() end
@@ -123,22 +122,45 @@ ToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Quest Remotes & Data
+-- Quest Remotes & Modules
 local RBRCQuest = ReplicatedStorage:WaitForChild("RBRCQuest", 10)
 local Remotes = RBRCQuest:WaitForChild("Remotes", 10)
 local QuestRequest = Remotes:WaitForChild("QuestRequest", 10)
+local QuestEventUp = Remotes:FindFirstChild("QuestEventUp")
 
 local RaycityUi = ReplicatedStorage:WaitForChild("RaycityUi", 10)
 local AutoDrive = require(RaycityUi:WaitForChild("AutoDrive", 10))
+local Navigation = require(RaycityUi:WaitForChild("Navigation", 10))
+local RCDrive = ReplicatedStorage:WaitForChild("RCDrive", 10)
+local EconomyRules = require(RCDrive:WaitForChild("EconomyRules", 10))
 
-local function isAutoDriveActive()
-    if type(AutoDrive.isActive) ~= "function" then return nil end
-    local ok, result = pcall(AutoDrive.isActive)
-    return ok and result or nil
+local MatchGeom = nil
+pcall(function()
+    MatchGeom = require(ReplicatedStorage:WaitForChild("RBRCMatch"):WaitForChild("MatchGeom"))
+end)
+
+if CONFIG.ENABLE_ANTI_AFK then
+    local VirtualUser = game:GetService("VirtualUser")
+    pcall(function()
+        LocalPlayer.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    end)
+    task.spawn(function()
+        while isRunning and _G.AutoQuestRunning do
+            task.wait(45)
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(100, 100))
+            end)
+        end
+    end)
 end
 
 AutoDrive.canCruise = function() return true end
 
+-- ระบบตั้งค่าพารามิเตอร์ขับขี่ตามไฟล์ต้นฉบับ[cite: 5]
 local function applyAutoDriveParams(isStop)
     AutoDrive.C.nearDestM = isStop and 0.2 or 1.5
     AutoDrive.C.arriveNearM = isStop and 1.5 or 2.5
@@ -146,14 +168,26 @@ local function applyAutoDriveParams(isStop)
     AutoDrive.C.arriveSlowerM = isStop and 0.5 or 0.6
     AutoDrive.options.arriveBrake = false
     AutoDrive.options.evasions = false  
+    AutoDrive.options.warpSkipSurfaces = { median = true, curb = true, sidewalk = true, building = true, wall = true, terrain = true, obstacle = true }
+    AutoDrive.C.weAheadM = 5
+    AutoDrive.C.weHitMs = 2000
+
     AutoDrive.C.maxSpeed = CONFIG.CRUISE_SPEED_MPS
-    AutoDrive.C.cap1 = 120.0
-    AutoDrive.C.cap2 = 90.0
-    AutoDrive.C.cap3 = 50.0
-    AutoDrive.C.lookAhead = 25
+    AutoDrive.C.cap1 = 82.0
+    AutoDrive.C.cap2 = 56.0
+    AutoDrive.C.cap3 = 28.0
+    AutoDrive.C.capCos1 = 0.85
+    AutoDrive.C.capCos2 = 0.70
+    AutoDrive.C.capCos3 = 0.50
+    AutoDrive.C.lookAhead = 22
+    AutoDrive.C.alignNearM = 14
+    AutoDrive.C.alignFarK = 0.98
+    AutoDrive.C.alignPeriodMs = 20
     AutoDrive.options.velocityAssist = true
     AutoDrive.options.aiDrift = false
     AutoDrive.options.uturnSweep = false
+    AutoDrive.options.endOnLane = false
+
     AutoDrive.canCruise = function() return true end
 end
 applyAutoDriveParams(false)
@@ -162,12 +196,32 @@ local function getQuestState()
     local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
     if rq and type(rq.state) == "function" then
         local ok, state = pcall(rq.state)
-        if ok and type(state) == "table" then return state end
+        return (ok and type(state) == "table") and state or nil
     end
     return nil
 end
 
+local function isCarInsidePoly(polyRaw, carPos)
+    if type(polyRaw) ~= "table" or not carPos then return false end
+    local polyFlat = {}
+    for _, p in ipairs(polyRaw) do
+        local x, z
+        if typeof(p) == "Vector3" then x, z = p.X, p.Z
+        elseif type(p) == "table" then x, z = tonumber(p.X or p.x or p[1]), tonumber(p.Z or p.z or p[3] or p[2]) end
+        if x and z then table.insert(polyFlat, x); table.insert(polyFlat, z) end
+    end
+    if #polyFlat < 6 or #polyFlat % 2 ~= 0 then return false end
+    if MatchGeom and type(MatchGeom.inside) == "function" then
+        local ok, result = pcall(MatchGeom.inside, polyFlat, carPos.X, carPos.Z)
+        if ok and type(result) == "boolean" then return result end
+    end
+    return false
+end
+
+-- Noclip & Hook System ตามต้นฉบับ[cite: 5]
 local dummyHook = function() end
+local dummyHookFalse = function() return false end
+
 local function maintainHooks()
     local renvShared = (getrenv and getrenv().shared) or shared
     if renvShared and renvShared.RCDrivePairHooks then
@@ -183,14 +237,14 @@ local function maintainHooks()
         local phys = rcd.phys
         if phys.throttle > 0 and phys.gear == 0 then phys.gear = 1 end
         if phys.p then
-            phys.p.redRpm = math.max(phys.p.redRpm or 6000, 12000)
-            phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 14000)
-            phys.p.vmax = math.max(phys.p.vmax or 100, 150)
-            phys.p.btPower = math.max(phys.p.btPower or 2.5, 5.0)
-            phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.8)
+            phys.p.redRpm = math.max(phys.p.redRpm or 6000, 9200)
+            phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 10800)
+            phys.p.vmax = math.max(phys.p.vmax or 100, 115)
+            phys.p.btPower = math.max(phys.p.btPower or 2.5, 3.8)
+            phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.35)
         end
-        phys.torqueBonus = math.max(phys.torqueBonus or 0, 1200)
-        phys.gripScale = math.max(phys.gripScale or 1, 3.5)
+        phys.torqueBonus = math.max(phys.torqueBonus or 0, 550)
+        phys.gripScale = math.max(phys.gripScale or 1, 2.8)
     end
 end
 
@@ -206,7 +260,7 @@ end
 
 local function getCarState()
     local root = getCarRoot()
-    return root and root.Position or nil
+    return root and root.Position or nil, root and root.CFrame.LookVector or nil
 end
 
 local function getLiveNpcPos()
@@ -214,9 +268,7 @@ local function getLiveNpcPos()
         local npcs = workspace:FindFirstChild("RBRCNpcs")
         if not npcs then return nil end
         local npc = npcs:FindFirstChild(CONFIG.NPC_NAME) or npcs:FindFirstChild("Npc_940105") or npcs:FindFirstChild(CONFIG.NPC_ID)
-        if not npc then return nil end
-        local root = npc:FindFirstChild("Root") or npc.PrimaryPart or npc:FindFirstChildWhichIsA("BasePart")
-        return root and root.Position or nil
+        return npc and (npc:FindFirstChild("Root") or npc.PrimaryPart or npc:FindFirstChildWhichIsA("BasePart")).Position or nil
     end)
     return (ok and typeof(pos) == "Vector3") and pos or nil
 end
@@ -232,36 +284,183 @@ local function parseVector3(val)
     return (x and y and z) and Vector3.new(tonumber(x), tonumber(y), tonumber(z)) or nil
 end
 
+-- Turbo Auto Boost[cite: 5]
+local cachedBoostFn = nil
+local function getBoostFn()
+    if cachedBoostFn then return cachedBoostFn end
+    for _, fn in ipairs(getgc(false)) do
+        if type(fn) == "function" and not isexecutorclosure(fn) then
+            local src, line = debug.info(fn, "sl")
+            if src and string.find(src, "RCDriveClient") then
+                local ok, consts = pcall(debug.getconstants, fn)
+                if ok and consts then
+                    for _, c in ipairs(consts) do
+                        if c == "startBoost" or c == "boostTransition" then
+                            cachedBoostFn = fn
+                            return cachedBoostFn
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local lastBoostCmdAt = 0
+local function tryAutoBoost()
+    if not CONFIG.ENABLE_AUTO_BOOST then return end
+    if os.clock() - lastBoostCmdAt < 0.25 then return end
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    local phys = rcd and rcd.phys
+    if not phys or phys.boosting or phys.throttle <= 0 then return end
+
+    local spState = EconomyRules.lastSPState
+    if spState and spState.sp and spState.sp >= math.max(phys.p and phys.p.btNeedSP or 50, 20) then
+        lastBoostCmdAt = os.clock()
+        local myCar = workspace:FindFirstChild("MyCar")
+        if myCar then pcall(function() myCar:SetAttribute("AutoCmd", "boost") end) end
+        local boostFn = getBoostFn()
+        if boostFn then pcall(boostFn) end
+    end
+end
+
+-- Cornering Grip Assist (ลอจิกการเลี้ยวและเกาะถนนแบบไฟล์ต้นฉบับ)[cite: 5]
+local adState = nil
+pcall(function()
+    if debug and debug.getupvalue and type(AutoDrive.debugState) == "function" then
+        local st = debug.getupvalue(AutoDrive.debugState, 1)
+        if type(st) == "table" then adState = st end
+    end
+end)
+
+local function pathPointAt(path, s)
+    local pts, cum, n = path.pts, path.cum, path.n
+    if s <= 0 then return pts[1] end
+    if s >= path.len then return pts[n] end
+    local lo, hi = 1, n
+    while hi - lo > 1 do
+        local mid = (lo + hi) // 2
+        if cum[mid] <= s then lo = mid else hi = mid end
+    end
+    local seg = cum[hi] - cum[lo]
+    return pts[lo]:Lerp(pts[hi], seg > 0 and (s - cum[lo]) / seg or 0)
+end
+
+local function pathProject(path, pos, hint)
+    local pts, cum, n = path.pts, path.cum, path.n
+    local i0 = hint and math.max(1, hint - 3) or 1
+    local i1 = hint and math.min(n - 1, hint + 35) or (n - 1)
+    local px, pz = pos.X, pos.Z
+    local bestD, bestS, bestIdx = math.huge, 0, i0
+    for i = i0, i1 do
+        local a, b = pts[i], pts[i + 1]
+        local dx, dz = b.X - a.X, b.Z - a.Z
+        local l2 = dx * dx + dz * dz
+        local t = l2 > 1e-8 and math.clamp(((px - a.X) * dx + (pz - a.Z) * dz) / l2, 0, 1) or 0
+        local cx, cz = a.X + dx * t - px, a.Z + dz * t - pz
+        local d = cx * cx + cz * cz
+        if d < bestD then bestD = d; bestS = cum[i] + (cum[i + 1] - cum[i]) * t; bestIdx = i end
+    end
+    return bestS, math.sqrt(bestD), bestIdx
+end
+
+local function flatDir(v, fallback)
+    local m = math.sqrt(v.X * v.X + v.Z * v.Z)
+    if m > 1e-4 then return Vector3.new(v.X / m, 0, v.Z / m) end
+    return fallback
+end
+
+local function applyCorneringGripAssist()
+    if not CONFIG.ENABLE_CORNERING_ASSIST then return end
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    local phys = rcd and rcd.phys
+    if not phys or not phys.v or not adState or not adState.active or adState.near then return end
+
+    local path = adState.path
+    if not path or not path.n or path.n < 2 or not path.len then return end
+    local root = getCarRoot()
+    if not root then return end
+
+    local cf = root.CFrame
+    local pos = cf.Position
+    local fwd = flatDir(cf.LookVector, Vector3.new(0, 0, -1))
+    local vFlat = Vector3.new(phys.v.X, 0, phys.v.Z)
+    local speed = vFlat.Magnitude
+
+    local sNow, lat, segIdx = pathProject(path, pos, adState.pathHint)
+    adState.pathHint = segIdx
+    local aim = math.clamp(6.5 + speed * 0.20 - lat * 0.30, 5.0, 22)
+    local target = pathPointAt(path, sNow + aim)
+    local roadDir = flatDir(pathPointAt(path, sNow + 3) - pathPointAt(path, sNow), fwd)
+    local want = flatDir(target - pos, roadDir)
+    local rel = cf:VectorToObjectSpace(want)
+
+    phys.steerIn = math.clamp(-rel.X * 2.0, -1, 1)
+    phys.gripScale = 2.8
+end
+
+RunService.Heartbeat:Connect(function()
+    if isRunning and _G.AutoQuestRunning then
+        pcall(applyCorneringGripAssist)
+    end
+end)
+
+-- Unstuck & Smooth Drive to NPC[cite: 5]
+local function performUnstuck(targetPos)
+    pcall(function() AutoDrive.stop("unstuck") end)
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = -0.65
+        rcd.phys.steerIn = 0.55
+        task.wait(0.8)
+        rcd.phys.throttle = 0
+        rcd.phys.steerIn = 0
+    end
+    if targetPos then
+        applyAutoDriveParams(false)
+        AutoDrive.request(targetPos, { snap = false, stopNavOnCancel = false })
+        AutoDrive.start()
+    end
+end
+
 local function driveToNpcSmooth(timeout)
     if not isRunning or not _G.AutoQuestRunning then return false end
-    timeout = timeout or 60
+    timeout = timeout or 90
     local npcPos = getNpcPos()
     local carPos = getCarState()
     if not carPos then return false end
 
-    if (carPos - npcPos).Magnitude <= 6.0 then return true end
+    if (carPos - npcPos).Magnitude <= 6.5 then return true end
 
     applyAutoDriveParams(true)
-    AutoDrive.C.maxSpeed = CONFIG.CRUISE_SPEED_MPS
     AutoDrive.request(npcPos, { snap = false, stopNavOnCancel = false })
     AutoDrive.start()
 
     local startTime = os.clock()
+    local lastPos = carPos
+    local lastMoveT = os.clock()
+
     while isRunning and _G.AutoQuestRunning do
         task.wait(0.05)
         maintainHooks()
         local currentPos = getCarState()
         if not currentPos then break end
-        local curDistToNpc = (currentPos - getNpcPos()).Magnitude
 
-        if curDistToNpc <= 6.0 then
+        npcPos = getNpcPos()
+        local dist = (currentPos - npcPos).Magnitude
+        if dist <= 6.5 then
             pcall(function() AutoDrive.stop("reached_npc") end)
             return true
         end
 
-        if isAutoDriveActive() == false and curDistToNpc > 6.0 then
-            AutoDrive.request(getNpcPos(), { snap = false, stopNavOnCancel = false })
-            AutoDrive.start()
+        if (currentPos - lastPos).Magnitude > 2 then
+            lastPos = currentPos
+            lastMoveT = os.clock()
+        elseif os.clock() - lastMoveT > CONFIG.STUCK_TIME_SEC and dist > 8 then
+            performUnstuck(npcPos)
+            lastPos = getCarState() or currentPos
+            lastMoveT = os.clock()
         end
 
         if os.clock() - startTime > timeout then break end
@@ -287,26 +486,18 @@ local function ensureQuestAccepted()
 
         local carPos = getCarState()
         local npcPos = getNpcPos()
-        local distToNpc = carPos and (carPos - npcPos).Magnitude or 999
-
-        if distToNpc > 6.5 then
-            driveToNpcSmooth(45)
-            task.wait(0.3)
+        if not carPos or (carPos - npcPos).Magnitude > 6.5 then
+            driveToNpcSmooth(60)
+            task.wait(0.2)
             carPos = getCarState()
         end
 
         if QuestRequest and carPos then
-            pcall(function()
-                QuestRequest:InvokeServer({op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos})
-            end)
-            task.wait(0.15)
-            pcall(function()
-                QuestRequest:InvokeServer({op = "accept", questId = CONFIG.QUEST_ID, npcId = CONFIG.NPC_ID, carPos = carPos})
-            end)
-            task.wait(0.15)
-            pcall(function()
-                QuestRequest:InvokeServer({op = "boarded", questId = CONFIG.QUEST_ID, carPos = carPos})
-            end)
+            pcall(function() QuestRequest:InvokeServer({op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos}) end)
+            task.wait(0.08)
+            pcall(function() QuestRequest:InvokeServer({op = "accept", questId = CONFIG.QUEST_ID, npcId = CONFIG.NPC_ID, carPos = carPos}) end)
+            task.wait(0.08)
+            pcall(function() QuestRequest:InvokeServer({op = "boarded", questId = CONFIG.QUEST_ID, carPos = carPos}) end)
         end
 
         local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
@@ -316,11 +507,11 @@ local function ensureQuestAccepted()
             task.wait(0.1)
             st = getQuestState()
             if st and st.questId == CONFIG.QUEST_ID and (st.state == "running" or st.state == "boarding") then
-                print("[AutoQuest] รับเควส Min R สำเร็จ! เริ่มต้นฟาร์มเส้นทางทันที!")
+                print("[AutoQuest] รับเควส Min R สำเร็จแล้ว!")
                 return true
             end
         end
-        task.wait(0.4)
+        task.wait(0.3)
     end
     return false
 end
@@ -340,6 +531,7 @@ local function getActiveObjective(st)
                             step = obj.step or st.step,
                             target = targetPos,
                             isStop = (obj.dest.stop == true) or (obj.dest.pillar == "stop"),
+                            poly = obj.dest.poly
                         }
                     end
                 end
@@ -349,33 +541,39 @@ local function getActiveObjective(st)
     return nil
 end
 
+-- ฟังก์ชันรันลูปเควสรอบหลัก พร้อมระบบชะลอความเร็วนุ่มนวลเมื่อถึงจุด STOP (ตามไฟล์ต้นฉบับ)[cite: 5]
 local function runOneQuestCycle()
     local accepted = ensureQuestAccepted()
-    if not accepted then
-        task.wait(1.0)
-        return
-    end
+    if not accepted then task.wait(1.0); return end
 
-    print(string.format("[AutoQuest] เริ่มทำเควส Min R Lv.20 (%s)!", CONFIG.QUEST_ID))
+    print(string.format("[AutoQuest] เริ่มต้นนำทางเส้นทางเควส Min R (%s)!", CONFIG.QUEST_ID))
     AutoDrive.C.maxSpeed = CONFIG.CRUISE_SPEED_MPS
 
     local currentActiveIdx = nil
     local currentActiveTarget = nil
     local currentActiveIsStop = false
+    local isHoldingStopBox = false
     local questStateUnknownSince = nil
 
     while isRunning and _G.AutoQuestRunning do
-        task.wait(0.05)
+        task.wait(0.06)
+        tryAutoBoost()
         maintainHooks()
+
+        if CONFIG.ENABLE_AUTO_THRILL then
+            pcall(function()
+                local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
+                if rq and rq.reportThrill then rq.reportThrill(2) end
+            end)
+        end
 
         local st = getQuestState()
         if not st then
             questStateUnknownSince = questStateUnknownSince or os.clock()
             if os.clock() - questStateUnknownSince >= CONFIG.QUEST_STATE_UNKNOWN_TIMEOUT then
-                warn("[AutoQuest] ไม่พบสถานะเควส -> จบรอบกลับไปรับเควสใหม่")
                 break
             end
-            task.wait(0.1)
+            task.wait(0.2)
             continue
         end
         questStateUnknownSince = nil
@@ -383,15 +581,13 @@ local function runOneQuestCycle()
         if st.state ~= "running" and st.state ~= "boarding" then break end
 
         local activeObj = getActiveObjective(st)
-        if not activeObj then
-            task.wait(0.1)
-            continue
-        end
+        if not activeObj then task.wait(0.1); continue end
 
         if activeObj.idx ~= currentActiveIdx or currentActiveTarget == nil or (activeObj.target - currentActiveTarget).Magnitude > 2 then
             currentActiveIdx = activeObj.idx
             currentActiveTarget = activeObj.target
             currentActiveIsStop = activeObj.isStop
+            isHoldingStopBox = false
 
             applyAutoDriveParams(activeObj.isStop)
             AutoDrive.request(activeObj.target, { snap = not activeObj.isStop, stopNavOnCancel = false })
@@ -400,11 +596,33 @@ local function runOneQuestCycle()
 
         local carPosNow = getCarState()
         local distToTarget = carPosNow and (carPosNow - activeObj.target).Magnitude or 999
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
 
-        if activeObj.isStop and distToTarget <= 5.0 then
-            pcall(function() AutoDrive.stop("reached_stop") end)
-            task.wait(0.5)
-            break
+        -- ลอจิกชะลอความเร็วนุ่มนวลเมื่อใกล้จุด STOP ตามไฟล์ต้นฉบับ[cite: 5]
+        if activeObj.isStop and not isHoldingStopBox and carPosNow then
+            if distToTarget <= 50 then
+                local targetSpeedKmh = distToTarget > 25 and 30 or (distToTarget > 10 and 18 or 8)
+                AutoDrive.C.maxSpeed = targetSpeedKmh / 3.6
+                if speedKmh > targetSpeedKmh + 2 then
+                    rcd.phys.throttle = 0
+                    rcd.phys.brake = 0.5
+                end
+            end
+            if distToTarget <= 4.0 then
+                isHoldingStopBox = true
+                pcall(function() AutoDrive.stop("stopped_at_destination") end)
+            end
+        end
+
+        if isHoldingStopBox then
+            if rcd and rcd.phys then
+                rcd.phys.throttle = 0
+                rcd.phys.brake = 1
+                rcd.phys.steerIn = 0
+            end
+            task.wait(0.1)
+            continue
         end
 
         if isAutoDriveActive() == false then
@@ -413,19 +631,20 @@ local function runOneQuestCycle()
         end
     end
 
-    AutoDrive.stop("quest_cycle_done")
+    AutoDrive.stop("cycle_done")
     task.wait(CONFIG.LOOP_DELAY)
 end
 
+-- ลูปหลักรันบอท
 task.spawn(function()
     print("==================================================")
-    print("[AutoQuest] เรย์ซิตี้ RB - Auto Quest Min R (Lv.20) Fixed v2.0 เริ่มทำงาน!")
+    print("[AutoQuest] Raycity RB - Bot Started (Min R / S1 Driving Logic)")
     print("==================================================")
     while isRunning and _G.AutoQuestRunning do
         local ok, err = pcall(runOneQuestCycle)
         if not ok then
-            warn("[AutoQuest] เกิดข้อผิดพลาดในรอบ:", err)
-            task.wait(1.0)
+            warn("[AutoQuest] Error:", err)
+            task.wait(1.5)
         end
         task.wait(CONFIG.LOOP_DELAY)
     end
