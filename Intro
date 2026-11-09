@@ -2,10 +2,10 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v13.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v14.0)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ล็อค STOP นิ่งสนิท 100% ไม่ถอยหลัง
-    - บังคับเบรกทันทีที่จบรอบ ไม่ให้รถไหลไป 5 วิ
+    - ระบบ STOP เหยียบเบรกนิ่งสนิท ไม่ถอยหลัง
+    - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ทันที (Zero Delay)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
     - ปุ่ม เปิด/ปิด การขายของ
@@ -35,9 +35,9 @@ local CONFIG = {
     ENABLE_ANTI_AFK = true,
     ENABLE_AUTO_THRILL = true,
 
-    -- ⏱️ ลดเวลารอวนรอบให้เร็วที่สุด
-    LOOP_DELAY = 0.1,
-    STOP_HOLD_TIME = 3.5,
+    -- ⏱️ ลดดีเลย์ให้เหลือ 0 (เริ่มใหม่ทันที)
+    LOOP_DELAY = 0.0,
+    STOP_HOLD_TIME = 0.1, -- รอแค่ให้เซิร์ฟเวอร์ตอบรับ
     QUEST_FINISH_CONFIRM_TIME = 5.0,
 
     TIMEOUT_PER_CHK = 65,
