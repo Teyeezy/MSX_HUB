@@ -2,10 +2,10 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v15.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v15.1 Fixed Brake)
     - ธีมสีแดงดำ สไตล์ MSX HUB
-    - ระบบ STOP เหยียบเบรกนิ่งสนิท ไม่ถอยหลัง (ไม่มี CFrame Freeze)
-    - บังคับเบรกทันทีที่จบรอบ + เริ่มรอบใหม่ทันที (Zero Delay)
+    - ระบบ STOP ปรับแก้ตัด AutoDrive ทันทีเมื่อถึงระยะเพื่อไม่ให้ถอยหลังสะอึก
+    - บังคับเบรกและเซ็ตฟิสิกส์ให้เป็น 0 ทันทีที่จบรอบ + เริ่มรอบใหม่ (Zero Delay)
     - ระบบ Bypass หน้าต่างรับเควสแบบรัวๆ (ไม่เด้งค้าง)
     - GUI แสดงเวลา, เงินรวม, เงิน/ชม., จำนวนรอบ, เวลาเฉลี่ย/รอบ
     - ปุ่ม เปิด/ปิด การขายของ
@@ -1505,14 +1505,24 @@ local function runOneQuestCycle()
         local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
         local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
         local carRoot = getCarRoot()
+
+        -- ⚡ ปรับระบบการจอดหยุด (Fixed Hard Stop): ตัด AutoDrive ทันทีเมื่อถึงระยะเพื่อป้องกันอาการถอยสะอึก
         if activeObj.isStop and not isHoldingStopBox then
-            local arrivedAtStop = (inBox and distToTarget <= 6.0 and speedKmh < 3.0) or (distToTarget <= 3.8)
+            local arrivedAtStop = (inBox and distToTarget <= 7.0) or (distToTarget <= 6.0)
             if arrivedAtStop then
                 isHoldingStopBox = true
                 stopEnteredAt = os.clock()
-                pcall(function() AutoDrive.stop("stopped_at_destination") end)
+                pcall(function() AutoDrive.stop("hard_stop_at_destination") end)
+                if rcd and rcd.phys then
+                    rcd.phys.throttle = 0
+                    rcd.phys.brake = 1
+                    rcd.phys.steerIn = 0
+                    rcd.phys.v = Vector3.zero
+                    rcd.phys.w = Vector3.zero
+                end
             end
         end
+
         if isHoldingStopBox then
             pcall(function() AutoDrive.stop("holding_brake") end)
             if rcd and rcd.phys then
@@ -1525,17 +1535,18 @@ local function runOneQuestCycle()
             lastStuckT = os.clock()
             lastProgressAt = os.clock()
             stepStartTime = os.clock()
-            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
+            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 0.2) then
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
                     if rcd and rcd.phys then rcd.phys.brake = 0 end
-                    task.wait(0.2)
+                    task.wait(0.1)
                     break
                 end
             end
-            task.wait(0.08)
+            task.wait(0.04)
             continue
         end
+
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
             if distToTarget <= 50 then
                 local targetSpeedKmh
@@ -1559,6 +1570,7 @@ local function runOneQuestCycle()
                 end
             end
         end
+
         local targetBehind = false
         if carPosNow and carRoot then
             local toTarget = activeObj.target - carPosNow
@@ -1649,15 +1661,15 @@ local function runOneQuestCycle()
         rcd.phys.w = Vector3.zero
     end
 
-    task.wait(0.1)
+    task.wait(0.05)
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
         ensureFuelReady(true)
     end
     if questStateRecoveryRequested then
-        task.wait(0.5)
+        task.wait(0.2)
     else
-        task.wait(0.1)
+        task.wait(0.05)
     end
     claimAllDropsAndSellInventory()
 end
