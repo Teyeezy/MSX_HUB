@@ -2,8 +2,8 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Path Following Custom Drive v32.0)
-    - ขับตามเส้นทาง (Path Following) จาก Navigation Module
+    MSX HUB - Raycity RB Auto Quest Bot (Raycast Road Following v33.0)
+    - ขับตามถนนจริงๆ ด้วย Raycast (สแกนหา Road Surface)
     - ไม่ใช้ AutoDrive (ไม่มีอาการหยุดๆ หายๆ)
     - มี Micro-Steering Wobble ให้ดูเหมือนมนุษย์
     - ความเร็ว 200 km/h (55.5 m/s)
@@ -166,12 +166,6 @@ local RoadFightRequest = Remotes:FindFirstChild("RoadFightRequest")
 local QuestDataModule = RBRCQuest:WaitForChild("QuestData", 10)
 if not QuestDataModule then warn("[MSX HUB] Error: ไม่พบ QuestData"); return end
 local QuestData = require(QuestDataModule)
-
-local RaycityUi = ReplicatedStorage:WaitForChild("RaycityUi", 10)
-if not RaycityUi then warn("[MSX HUB] Error: ไม่พบ RaycityUi"); return end
-local NavigationModule = RaycityUi:WaitForChild("Navigation", 10)
-if not NavigationModule then warn("[MSX HUB] Error: โหลด Navigation ไม่สำเร็จ"); return end
-local Navigation = require(NavigationModule)
 
 local RCDrive = ReplicatedStorage:WaitForChild("RCDrive", 10)
 if not RCDrive then warn("[MSX HUB] Error: ไม่พบ RCDrive"); return end
@@ -470,7 +464,6 @@ local function startNpcPositionHold()
     if npcPositionHoldConn then return true end
     local root = getCarRoot()
     if not root then return false end
-    pcall(function() AutoDrive.stop("npc_hold") end)
     npcPositionHoldCFrame = root.CFrame
     local lastQuestStateCheck = 0
     local questStarted = false
