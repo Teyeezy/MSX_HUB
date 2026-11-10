@@ -2,12 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (v25.0 STABLE FARM)
-    - ความเร็ว 252 km/h (70 m/s)
+    MSX HUB - Raycity RB Auto Quest Bot (Anti-Ban v28.0)
+    - ความเร็ว 200 km/h (55.5 m/s)
+    - ระบบ Anti-Ban: Human-like Randomization, Path Jitter, Behavior Variation
     - ปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R)
-    - แก้ปัญ�ารหมุนติ้วหลังจบรอบ (ล็อคเบรกและพวงมาลัยระหว่างขายของ)
-    - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 500 studs)
-    - ไม่มี Webhook
+    - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 200 studs)
     ====================================================================
 --]]
 
@@ -25,7 +24,7 @@ local CONFIG = {
         NPC_NAME = "Npc_931676",
         NPC_POS = Vector3.new(-1225.35, 40.34, -5316.00),
         PARK_POS = Vector3.new(-1228.63, 41.74, -5315.22),
-        CRUISE_SPEED_MPS = 70, -- ลดความเร็วลง
+        CRUISE_SPEED_MPS = 55.5, -- 200 km/h
         SLOT = 1,
         IS_ROADFIGHT = true,
     },
@@ -37,7 +36,7 @@ local CONFIG = {
         NPC_NAME = "Npc_940105",
         NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
         PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-        CRUISE_SPEED_MPS = 70, -- ลดความเร็วลง
+        CRUISE_SPEED_MPS = 55.5, -- 200 km/h
         SLOT = nil,
         IS_ROADFIGHT = false,
     },
@@ -48,9 +47,9 @@ local CONFIG = {
     NPC_NAME = "Npc_940105",
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-    CRUISE_SPEED_MPS = 70,
+    CRUISE_SPEED_MPS = 55.5, -- 200 km/h
 
-    CAP1_SPEED = 60.0, -- ปรับ Cap ความเร็วตาม
+    CAP1_SPEED = 55.5,
     CAP2_SPEED = 45.0,
     CAP3_SPEED = 25.0,
 
@@ -151,6 +150,24 @@ local function getPlayerLevel()
     return 1
 end
 
+-- ====================================================================
+-- 🛑 ระบบ Anti-Ban: Human-like Randomization
+-- ====================================================================
+local function humanWait(baseTime, variance)
+    variance = variance or 0.05
+    task.wait(baseTime + (math.random() * variance * 2) - variance)
+end
+
+local function randomizeTarget(targetPos, radius)
+    radius = radius or 5
+    local jitter = Vector3.new(
+        math.random(-radius, radius),
+        0,
+        math.random(-radius, radius)
+    )
+    return targetPos + jitter
+end
+
 local RBRCQuest = ReplicatedStorage:WaitForChild("RBRCQuest", 10)
 if not RBRCQuest then warn("[MSX HUB] Error: ไม่พบ RBRCQuest"); return end
 local Remotes = RBRCQuest:WaitForChild("Remotes", 10)
@@ -202,7 +219,7 @@ if CONFIG.ENABLE_ANTI_AFK then
     end)
     task.spawn(function()
         while true do
-            task.wait(45)
+            humanWait(45, 5) -- สุ่ม 40-50 วินาที
             if _G.AutoQuestRunning then
                 pcall(function()
                     VirtualUser:CaptureController()
@@ -976,7 +993,7 @@ local function driveToNpcSmooth(timeout)
     local lastPos = carPos
     local lastMoveT = os.clock()
     while _G.AutoQuestRunning do
-        task.wait(0.04)
+        humanWait(0.04, 0.02)
         applyCorneringGripAssist()
         maintainHooks()
         local currentPos = getCarState()
@@ -1111,7 +1128,7 @@ local function driveToFuelAndRefuel(timeout)
     local lastPos = carPos
     local lastMoveT = os.clock()
     while _G.AutoQuestRunning do
-        task.wait(0.04)
+        humanWait(0.04, 0.02)
         applyCorneringGripAssist()
         maintainHooks()
         local curPos = getCarState()
@@ -1131,12 +1148,12 @@ local function driveToFuelAndRefuel(timeout)
                 rcd.phys.v = Vector3.new(0, 0, 0)
                 rcd.phys.w = Vector3.new(0, 0, 0)
             end
-            task.wait(0.3)
+            humanWait(0.3, 0.1)
             for attempt = 1, 4 do
                 if requestServerRefuel(station.npcId) then break end
-                task.wait(0.4)
+                humanWait(0.4, 0.2)
             end
-            task.wait(0.5)
+            humanWait(0.5, 0.1)
             return true
         end
         if isAutoDriveActive() == false and distToStation > 7.0 then
@@ -1273,6 +1290,17 @@ local function claimAllDropsAndSellInventory()
         end
         if CONFIG.ENABLE_AUTO_SELL then sellAllInventoryItems() end
     end)
+    -- 🛑 บังคับหยุดรถทันทีหลังขายของเสร็จ (แก้ปัญหารถหมุน)
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = 0
+        rcd.phys.brake = 1
+        rcd.phys.steerIn = 0
+        rcd.phys.v = Vector3.zero
+        rcd.phys.w = Vector3.zero
+    end
+    pcall(function() AutoDrive.stop("sell_lock") end)
+    
     isClaimingDrops = false
     return claimedAny
 end
@@ -1284,9 +1312,9 @@ if MXPush then
             if not _G.AutoQuestRunning or (not CONFIG.ENABLE_AUTO_LOOT and not CONFIG.ENABLE_AUTO_SELL) then return end
             if type(pkt) == "table" and (pkt.op == "drop" or pkt.op == "diceResult") then
                 task.spawn(function()
-                    task.wait(0.15)
+                    humanWait(0.15, 0.05)
                     claimAllDropsAndSellInventory()
-                    task.wait(0.5)
+                    humanWait(0.5, 0.1)
                     claimAllDropsAndSellInventory()
                 end)
             end
@@ -1320,7 +1348,7 @@ local function ensureQuestAccepted()
             return true
         end
         local carPos = getCarState()
-        if not carPos then task.wait(0.2); continue end
+        if not carPos then humanWait(0.2, 0.1); continue end
         local npcPos = getLiveNpcPos() or CONFIG.NPC_POS
         local distToNpc = (carPos - npcPos).Magnitude
         if distToNpc > 7.0 then
@@ -1328,10 +1356,10 @@ local function ensureQuestAccepted()
             local reachedNpc = driveToNpcSmooth(90)
             if not reachedNpc then
                 stopNpcPositionHold()
-                task.wait(0.3)
+                humanWait(0.3, 0.2)
                 continue
             end
-            task.wait(0.08)
+            humanWait(0.08, 0.05)
             carPos = getCarState()
             if not carPos then continue end
             distToNpc = (carPos - npcPos).Magnitude
@@ -1339,7 +1367,7 @@ local function ensureQuestAccepted()
         if distToNpc > 8.0 then
             stopNpcPositionHold()
             driveToNpcSmooth(15)
-            task.wait(0.12)
+            humanWait(0.12, 0.05)
             carPos = getCarState()
             if not carPos then continue end
         end
@@ -1352,7 +1380,7 @@ local function ensureQuestAccepted()
                     QuestRequest:InvokeServer({op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos})
                 end)
             end
-            task.wait(0.15)
+            humanWait(0.15, 0.05)
             local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
             if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
                 pcall(function() QuestUI._offerAnswer(true) end)
@@ -1367,11 +1395,11 @@ local function ensureQuestAccepted()
                 pcall(function()
                     QuestRequest:InvokeServer({ op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos })
                 end)
-                task.wait(CONFIG.ACCEPT_DELAY_TALK)
+                humanWait(CONFIG.ACCEPT_DELAY_TALK, 0.02)
                 pcall(function()
                     QuestRequest:InvokeServer({ op = "accept", questId = CONFIG.QUEST_ID, npcId = CONFIG.NPC_ID, carPos = carPos })
                 end)
-                task.wait(CONFIG.ACCEPT_DELAY_ACCEPT)
+                humanWait(CONFIG.ACCEPT_DELAY_ACCEPT, 0.02)
                 pcall(function()
                     QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID, carPos = carPos })
                 end)
@@ -1383,7 +1411,7 @@ local function ensureQuestAccepted()
         local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
         
         for waitStep = 1, CONFIG.ACCEPT_POLL_MAX do
-            task.wait(CONFIG.ACCEPT_POLL_INTERVAL)
+            humanWait(CONFIG.ACCEPT_POLL_INTERVAL, 0.01)
             
             if QuestUI then
                 if QuestUI.offerShown and QuestUI.offerShown() then
@@ -1414,7 +1442,7 @@ local function ensureQuestAccepted()
                 end
             end
         end
-        task.wait(0.2)
+        humanWait(0.2, 0.1)
     end
     stopNpcPositionHold()
     return false
@@ -1424,7 +1452,7 @@ local function runOneQuestCycle()
     local currentLv = getPlayerLevel()
     local accepted = ensureQuestAccepted()
     if not accepted then
-        task.wait(2.0)
+        humanWait(2.0, 0.5)
         return
     end
     
@@ -1453,7 +1481,7 @@ local function runOneQuestCycle()
     local questFinishedConfirmedAt = nil
 
     while _G.AutoQuestRunning do
-        task.wait(0.05)
+        humanWait(0.05, 0.02)
         tryAutoBoost()
         applyCorneringGripAssist()
         maintainHooks()
@@ -1496,7 +1524,7 @@ local function runOneQuestCycle()
             end
             local confirmElapsed = os.clock() - questFinishedConfirmedAt
             if finishConfirmed and confirmElapsed >= 0.3 then
-                task.wait(CONFIG.STOP_HOLD_TIME)
+                humanWait(CONFIG.STOP_HOLD_TIME, 0.05)
                 
                 local cycleDuration = os.clock() - cycleStartTime
                 STATS.totalCycles = STATS.totalCycles + 1
@@ -1509,21 +1537,21 @@ local function runOneQuestCycle()
                 questStateRecoveryRequested = true
                 break
             end
-            task.wait(0.15)
+            humanWait(0.15, 0.05)
             continue
         end
         questStateUnknownSince = nil
         questFinishedConfirmedAt = nil
 
         if st.state ~= "running" and st.state ~= "boarding" then
-            task.wait(CONFIG.STOP_HOLD_TIME)
+            humanWait(CONFIG.STOP_HOLD_TIME, 0.05)
             break
         end
         if st.state == "boarding" and QuestRequest then
             pcall(function() QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID }) end)
         end
         local activeObj = getActiveObjective(st)
-        if not activeObj then task.wait(0.08); continue end
+        if not activeObj then humanWait(0.08, 0.03); continue end
         local targetChanged = currentActiveTarget == nil
             or (activeObj.target - currentActiveTarget).Magnitude > 2
             or activeObj.isStop ~= currentActiveIsStop
@@ -1546,8 +1574,12 @@ local function runOneQuestCycle()
             local carPosCurrent = getCarState()
             local initDist = carPosCurrent and (carPosCurrent - activeObj.target).Magnitude or 999
             applyAutoDriveParams(activeObj.isStop and initDist <= 45)
+            
+            -- 🛑 Anti-Ban: สุ่มตำแหน่งเป้าหมายเล็กน้อย
+            local jitteredTarget = randomizeTarget(activeObj.target, 3)
+            
             local requestOk, requestResult = pcall(function()
-                return AutoDrive.request(activeObj.target, { snap = not activeObj.isStop, stopNavOnCancel = false })
+                return AutoDrive.request(jitteredTarget, { snap = not activeObj.isStop, stopNavOnCancel = false })
             end)
             if requestOk and requestResult ~= false then
                 pcall(function() AutoDrive.start() end)
@@ -1571,9 +1603,9 @@ local function runOneQuestCycle()
             end
         end
 
-        -- ⚡ ระบบชะลอความเร็วล่วงหน้า 500 studs (Distance-Based Linear Deceleration)
+        -- ⚡ ระบบชะลอความเร็วล่วงหน้า 200 studs (Distance-Based Linear Deceleration)
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
-            local START_DECEL_DIST = 500
+            local START_DECEL_DIST = 200
             local MIN_SPEED = 5
             
             if distToTarget <= START_DECEL_DIST then
@@ -1625,11 +1657,11 @@ local function runOneQuestCycle()
                 local stCheck = getQuestState()
                 if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
                     if rcd and rcd.phys then rcd.phys.brake = 0 end
-                    task.wait(0.2)
+                    humanWait(0.2, 0.1)
                     break
                 end
             end
-            task.wait(0.04)
+            humanWait(0.04, 0.02)
             continue
         end
 
@@ -1723,7 +1755,7 @@ local function runOneQuestCycle()
         rcd.phys.w = Vector3.zero
     end
 
-    task.wait(0.1)
+    humanWait(0.1, 0.05)
     claimAllDropsAndSellInventory()
     if isRefuelNeeded(true) then
         ensureFuelReady(true)
@@ -1735,9 +1767,9 @@ local function runOneQuestCycle()
     end
 
     if questStateRecoveryRequested then
-        task.wait(0.5)
+        humanWait(0.5, 0.2)
     else
-        task.wait(0.1)
+        humanWait(0.1, 0.05)
     end
     claimAllDropsAndSellInventory()
 end
@@ -2034,7 +2066,7 @@ local function startBot()
             if not ok then
                 warn("[MSX HUB] Error:", err)
                 pcall(function() AutoDrive.stop("error_recover") end)
-                task.wait(1.5)
+                humanWait(1.5, 0.5)
             end
             task.wait(CONFIG.LOOP_DELAY)
         end
