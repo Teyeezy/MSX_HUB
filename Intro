@@ -2,8 +2,8 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Natural Drive v29.0)
-    - ระบบขับขี่เนียนเหมือนมนุษย์: Smooth Randomization & Micro-Jitter
+    MSX HUB - Raycity RB Auto Quest Bot (Human-Like Drive v30.0)
+    - ระบบขับขี่เนียนเหมือนมนุษย์: Micro-Steering Wobble & Continuous AutoDrive
     - ไม่หยุดๆ ถอยๆ ระหว่างทำเควส
     - ความเร็ว 200 km/h (55.5 m/s)
     - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 200 studs)
@@ -1480,12 +1480,39 @@ local function runOneQuestCycle()
     local lastLootCheckAt = 0
     local stopEnteredAt = nil
     local questFinishedConfirmedAt = nil
+    -- 🛑 ตัวแปรสำหรับ Micro-Steering Wobble
+    local lastWobbleUpdate = 0
+    local currentWobble = 0
 
     while _G.AutoQuestRunning do
         task.wait(0.05)
         tryAutoBoost()
         applyCorneringGripAssist()
         maintainHooks()
+        
+        -- 🛑 สร้างการสั่นพวงมาลัยเล็กน้อย (Micro-Steering Wobble)
+        if os.clock() - lastWobbleUpdate > 0.5 then
+            lastWobbleUpdate = os.clock()
+            if math.random() > 0.7 then -- 30% โอกาสที่จะสั่น
+                currentWobble = (math.random() * 0.2) - 0.1 -- สุ่มระหว่าง -0.1 ถึง 0.1
+            else
+                currentWobble = 0
+            end
+        end
+        
+        local rcd_wobble = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        if rcd_wobble and rcd_wobble.phys and not isHoldingStopBox and not npcPositionHoldConn then
+            if math.abs(rcd_wobble.phys.steerIn or 0) < 0.3 then
+                rcd_wobble.phys.steerIn = (rcd_wobble.phys.steerIn or 0) + currentWobble
+            end
+        end
+        
+        -- 🛑 บังคับให้ AutoDrive ทำงานต่อเนื่อง ถ้ามันหยุดเอง
+        if not isAutoDriveActive() and currentActiveTarget and not isHoldingStopBox then
+            AutoDrive.request(currentActiveTarget, { snap = false, stopNavOnCancel = false })
+            AutoDrive.start()
+        end
+
         if CONFIG.ENABLE_AUTO_THRILL and (os.clock() - lastThrillReportAt) >= 1.5 then
             lastThrillReportAt = os.clock()
             pcall(function()
