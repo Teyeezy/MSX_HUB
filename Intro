@@ -2,12 +2,13 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (v25.0 STABLE FARM)
-    - ความเร็ว 252 km/h (70 m/s)
-    - ปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R)
-    - แก้ปัญ�ารหมุนติ้วหลังจบรอบ (ล็อคเบรกและพวงมาลัยระหว่างขายของ)
+    MSX HUB - Raycity RB Auto Quest Bot (Ultimate Fix v26.0)
+    - ธีมสีแดงดำ สไตล์ MSX HUB
+    - ฟิสิกส์การขับขี่จาก ww.txt (ปรับความเร็วเป็น 85 m/s)
     - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 500 studs)
-    - ไม่มี Webhook
+    - ระบบหยุดนิ่งสนิท 100% (Total Lockdown at STOP)
+    - แก้ปัญหารถหมุนหลังขายของ (Force Stop after Sell)
+    - มีปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R) บน GUI
     ====================================================================
 --]]
 
@@ -25,7 +26,7 @@ local CONFIG = {
         NPC_NAME = "Npc_931676",
         NPC_POS = Vector3.new(-1225.35, 40.34, -5316.00),
         PARK_POS = Vector3.new(-1228.63, 41.74, -5315.22),
-        CRUISE_SPEED_MPS = 70, -- ลดความเร็วลง
+        CRUISE_SPEED_MPS = 85,
         SLOT = 1,
         IS_ROADFIGHT = true,
     },
@@ -37,7 +38,7 @@ local CONFIG = {
         NPC_NAME = "Npc_940105",
         NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
         PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-        CRUISE_SPEED_MPS = 70, -- ลดความเร็วลง
+        CRUISE_SPEED_MPS = 85,
         SLOT = nil,
         IS_ROADFIGHT = false,
     },
@@ -48,11 +49,12 @@ local CONFIG = {
     NPC_NAME = "Npc_940105",
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-    CRUISE_SPEED_MPS = 70,
+    CRUISE_SPEED_MPS = 85,
 
-    CAP1_SPEED = 60.0, -- ปรับ Cap ความเร็วตาม
-    CAP2_SPEED = 45.0,
-    CAP3_SPEED = 25.0,
+    -- ฟิสิกส์การขับขี่ (ดึงจาก ww.txt)
+    CAP1_SPEED = 82.0,
+    CAP2_SPEED = 56.0,
+    CAP3_SPEED = 28.0,
 
     ENABLE_AUTO_BOOST = true,
     ENABLE_CORNERING_ASSIST = true,
@@ -193,6 +195,9 @@ pcall(function()
     MatchGeom = require(ReplicatedStorage:WaitForChild("RBRCMatch"):WaitForChild("MatchGeom"))
 end)
 
+-- ====================================================================
+-- ระบบป้องกันการหลุด AFK 20 นาที (Anti-AFK System)
+-- ====================================================================
 if CONFIG.ENABLE_ANTI_AFK then
     pcall(function()
         LocalPlayer.Idled:Connect(function()
@@ -213,6 +218,9 @@ if CONFIG.ENABLE_ANTI_AFK then
     end)
 end
 
+-- ====================================================================
+-- ฟังก์ชันตั้งค่า AutoDrive (ฟิสิกส์จาก ww.txt)
+-- ====================================================================
 local function ensureAutoDriveCruise()
     AutoDrive.canCruise = function() return true end
 end
@@ -1273,6 +1281,17 @@ local function claimAllDropsAndSellInventory()
         end
         if CONFIG.ENABLE_AUTO_SELL then sellAllInventoryItems() end
     end)
+    -- 🛑 บังคับหยุดรถทันทีหลังขายของเสร็จ (แก้ปัญหารถหมุน)
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = 0
+        rcd.phys.brake = 1
+        rcd.phys.steerIn = 0
+        rcd.phys.v = Vector3.zero
+        rcd.phys.w = Vector3.zero
+    end
+    pcall(function() AutoDrive.stop("sell_lock") end)
+    
     isClaimingDrops = false
     return claimedAny
 end
@@ -1713,7 +1732,7 @@ local function runOneQuestCycle()
     end
     AutoDrive.stop(questStateRecoveryRequested and "quest_state_lost" or "quest_done")
     
-    -- 🛑 ล็อคเบรกและพวงมาลัยให้ตรงทันทีที่จบรอบ (ระหว่างขายของ)
+    -- 🛑 บังคับเบรกและล็อคความเร็วทันทีที่จบรอบ
     local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
     if rcd and rcd.phys then
         rcd.phys.throttle = 0
@@ -1728,12 +1747,6 @@ local function runOneQuestCycle()
     if isRefuelNeeded(true) then
         ensureFuelReady(true)
     end
-    
-    -- 🛑 ปลดล็อคเบรกก่อนเริ่มรอบใหม่
-    if rcd and rcd.phys then
-        rcd.phys.brake = 0
-    end
-
     if questStateRecoveryRequested then
         task.wait(0.5)
     else
@@ -1948,10 +1961,10 @@ end
 local function setPhaseButtonState()
     if isPhase1 then
         PhaseBtn.Text = "Phase 1: Derix"
-        PhaseBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 200) -- สีม่วง
+        PhaseBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 200)
     else
         PhaseBtn.Text = "Phase 2: Min R"
-        PhaseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200) -- สีน้ำเงิน
+        PhaseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200)
     end
     updatePhaseConfig()
 end
@@ -2036,7 +2049,16 @@ local function startBot()
                 pcall(function() AutoDrive.stop("error_recover") end)
                 task.wait(1.5)
             end
-            task.wait(CONFIG.LOOP_DELAY)
+            -- 🛑 หยุดรถให้สนิทก่อนเริ่มรอบใหม่
+            local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+            if rcd and rcd.phys then
+                rcd.phys.throttle = 0
+                rcd.phys.brake = 1
+                rcd.phys.steerIn = 0
+                rcd.phys.v = Vector3.zero
+                rcd.phys.w = Vector3.zero
+            end
+            task.wait(0.2)
         end
         pcall(function() AutoDrive.stop("exit") end)
         isGuiRunning = false
