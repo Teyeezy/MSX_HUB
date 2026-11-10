@@ -1573,7 +1573,7 @@ local function runOneQuestCycle()
 
         -- ⚡ ระบบชะลอความเร็วล่วงหน้า 500 studs (Distance-Based Linear Deceleration)
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
-            local START_DECEL_DIST = 200
+            local START_DECEL_DIST = 350
             local MIN_SPEED = 5
             
             if distToTarget <= START_DECEL_DIST then
