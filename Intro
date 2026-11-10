@@ -2,11 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Phase 1 & 2 Selector v24.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Original Physics v25.0)
+    - ใช้ฟิสิกส์การขับขี่และการทำเควสจากไฟล์ ww.txt ต้นฉบับ
+    - ปรับความเร็วลงเล็กน้อยเป็น 85 m/s (~306 km/h) เพื่อความเนียน
+    - เพิ่มระบบกันรถติด (Smart Unstuck) และระบบกันโดนแบน (Anti-Ban)
     - มีปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R) บน GUI
-    - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 500 studs)
-    - ระบบหยุดนิ่งสนิท 100% (Total Lockdown at STOP)
-    - ไม่มี Webhook
     ====================================================================
 --]]
 
@@ -24,7 +24,7 @@ local CONFIG = {
         NPC_NAME = "Npc_931676",
         NPC_POS = Vector3.new(-1225.35, 40.34, -5316.00),
         PARK_POS = Vector3.new(-1228.63, 41.74, -5315.22),
-        CRUISE_SPEED_MPS = 98,
+        CRUISE_SPEED_MPS = 85, -- ปรับลดลงนิดนึง
         SLOT = 1,
         IS_ROADFIGHT = true,
     },
@@ -36,7 +36,7 @@ local CONFIG = {
         NPC_NAME = "Npc_940105",
         NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
         PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-        CRUISE_SPEED_MPS = 99,
+        CRUISE_SPEED_MPS = 85, -- ปรับลดลงนิดนึง
         SLOT = nil,
         IS_ROADFIGHT = false,
     },
@@ -47,7 +47,12 @@ local CONFIG = {
     NPC_NAME = "Npc_940105",
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-    CRUISE_SPEED_MPS = 99,
+    CRUISE_SPEED_MPS = 85,
+
+    -- ฟิสิกส์การขับขี่ (ดึงจาก ww.txt)
+    CAP1_SPEED = 82.0,
+    CAP2_SPEED = 56.0,
+    CAP3_SPEED = 28.0,
 
     ENABLE_AUTO_BOOST = true,
     ENABLE_CORNERING_ASSIST = true,
@@ -188,6 +193,9 @@ pcall(function()
     MatchGeom = require(ReplicatedStorage:WaitForChild("RBRCMatch"):WaitForChild("MatchGeom"))
 end)
 
+-- ====================================================================
+-- ระบบป้องกันการหลุด AFK 20 นาที (Anti-AFK System)
+-- ====================================================================
 if CONFIG.ENABLE_ANTI_AFK then
     pcall(function()
         LocalPlayer.Idled:Connect(function()
@@ -208,6 +216,16 @@ if CONFIG.ENABLE_ANTI_AFK then
     end)
 end
 
+-- ====================================================================
+-- ระบบกันโดนแบน (Anti-Ban) - หน่วงเวลาแบบสุ่ม
+-- ====================================================================
+local function smartWait(baseTime)
+    task.wait(baseTime + math.random() * 0.05) -- สุ่มเวลาบวกนิดหน่อย
+end
+
+-- ====================================================================
+-- ฟังก์ชันตั้งค่า AutoDrive (ฟิสิกส์จาก ww.txt)
+-- ====================================================================
 local function ensureAutoDriveCruise()
     AutoDrive.canCruise = function() return true end
 end
@@ -1936,10 +1954,10 @@ end
 local function setPhaseButtonState()
     if isPhase1 then
         PhaseBtn.Text = "Phase 1: Derix"
-        PhaseBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 200) -- สีม่วง
+        PhaseBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 200)
     else
         PhaseBtn.Text = "Phase 2: Min R"
-        PhaseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200) -- สีน้ำเงิน
+        PhaseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200)
     end
     updatePhaseConfig()
 end
