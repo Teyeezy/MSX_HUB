@@ -1988,11 +1988,16 @@ end
 local function runOneQuestCycle()
     local currentLv = getPlayerLevel()
     local phaseCfg
-    if currentLv < CONFIG.PHASE1_MAX_LEVEL then
+    
+    -- แก้ไขเงื่อนไขตรงนี้: ถ้าเลเวลน้อยกว่า 17 ให้วิ่งเฟส 1 แต่ถ้า 17 หรือมากกว่าบังคับดีดเข้าเฟส 2 ทันที
+    if currentLv < 17 then
         phaseCfg = CONFIG.PHASE1
+        print(string.format("[AutoQuest] 🟢 กำลังลุยเควส เฟส 1 (Derix) | เลเวลปัจจุบัน: %d", currentLv))
     else
         phaseCfg = CONFIG.PHASE2
+        print(string.format("[AutoQuest] 🚀 เลเวลทะลุ 17 แล้ว! ล็อกเป้าพุ่งชน เฟส 2 (Min R / S105) เต็มระบบ | เลเวล: %d", currentLv))
     end
+    
     applyPhaseConfig(phaseCfg)
 
     local accepted = ensureQuestAccepted(phaseCfg)
@@ -2004,6 +2009,8 @@ local function runOneQuestCycle()
 
     print(string.format("[AutoQuest] เริ่มต้นการนำทางเควส %s (%s) [Lv.%d]!", phaseCfg.QUEST_ID, phaseCfg.NAME, currentLv))
     AutoDrive.C.maxSpeed = phaseCfg.CRUISE_SPEED_MPS
+
+    -- (ปล่อยโค้ดลูปวิ่งเช็คพอยต์ด้านในตามเดิมจนจบฟังก์ชัน...)
 
     local currentActiveIdx = nil
     local currentActiveTarget = nil
