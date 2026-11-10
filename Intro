@@ -2,11 +2,12 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Anti-Ban v28.0)
+    MSX HUB - Raycity RB Auto Quest Bot (Natural Drive v29.0)
+    - ระบบขับขี่เนียนเหมือนมนุษย์: Smooth Randomization & Micro-Jitter
+    - ไม่หยุดๆ ถอยๆ ระหว่างทำเควส
     - ความเร็ว 200 km/h (55.5 m/s)
-    - ระบบ Anti-Ban: Human-like Randomization, Path Jitter, Behavior Variation
-    - ปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R)
     - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 200 studs)
+    - ปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R)
     ====================================================================
 --]]
 
@@ -993,7 +994,7 @@ local function driveToNpcSmooth(timeout)
     local lastPos = carPos
     local lastMoveT = os.clock()
     while _G.AutoQuestRunning do
-        humanWait(0.04, 0.02)
+        task.wait(0.04)
         applyCorneringGripAssist()
         maintainHooks()
         local currentPos = getCarState()
@@ -1128,7 +1129,7 @@ local function driveToFuelAndRefuel(timeout)
     local lastPos = carPos
     local lastMoveT = os.clock()
     while _G.AutoQuestRunning do
-        humanWait(0.04, 0.02)
+        task.wait(0.04)
         applyCorneringGripAssist()
         maintainHooks()
         local curPos = getCarState()
@@ -1481,7 +1482,7 @@ local function runOneQuestCycle()
     local questFinishedConfirmedAt = nil
 
     while _G.AutoQuestRunning do
-        humanWait(0.05, 0.02)
+        task.wait(0.05)
         tryAutoBoost()
         applyCorneringGripAssist()
         maintainHooks()
@@ -1575,8 +1576,9 @@ local function runOneQuestCycle()
             local initDist = carPosCurrent and (carPosCurrent - activeObj.target).Magnitude or 999
             applyAutoDriveParams(activeObj.isStop and initDist <= 45)
             
-            -- 🛑 Anti-Ban: สุ่มตำแหน่งเป้าหมายเล็กน้อย
-            local jitteredTarget = randomizeTarget(activeObj.target, 3)
+            -- 🛑 Anti-Ban: สุ่มตำแหน่งเป้าหมายเล็กน้อย (Smooth Randomization)
+            local jitterRadius = 5 -- สุ่มไม่เกิน 5 studs เพื่อไม่ให้หลุดเส้นทาง
+            local jitteredTarget = randomizeTarget(activeObj.target, jitterRadius)
             
             local requestOk, requestResult = pcall(function()
                 return AutoDrive.request(jitteredTarget, { snap = not activeObj.isStop, stopNavOnCancel = false })
