@@ -3,10 +3,10 @@ task.wait(1.5)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
-_G.AutoFarm = true
+_G.AutoFarm = false
 _G.FarmSpeed = 74
 local running = false
 
@@ -320,14 +320,128 @@ local function cycle()
     waitHuman(CFG.MinLoopWait, CFG.MaxLoopWait)
 end
 
+-- ==================== GUI ====================
+local gui = Instance.new("ScreenGui")
+gui.Name = "SF"
+gui.ResetOnSpawn = false
+gui.Parent = game.CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 110)
+frame.Position = UDim2.new(0.5, -100, 0.12, 0)
+frame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 26)
+title.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
+title.BorderSizePixel = 0
+title.Text = "Stealth Farm"
+title.TextColor3 = Color3.fromRGB(0, 200, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.Parent = frame
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 8)
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -12, 0, 16)
+status.Position = UDim2.new(0, 6, 0, 30)
+status.BackgroundTransparency = 1
+status.Text = "สถานะ: ปิด"
+status.TextColor3 = Color3.fromRGB(180, 180, 180)
+status.Font = Enum.Font.Gotham
+status.TextSize = 11
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = frame
+
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(1, -12, 0, 26)
+btn.Position = UDim2.new(0, 6, 0, 50)
+btn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+btn.Text = "เปิดฟาร์ม"
+btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+btn.Font = Enum.Font.GothamBold
+btn.TextSize = 12
+btn.Parent = frame
+Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+local spdLabel = Instance.new("TextLabel")
+spdLabel.Size = UDim2.new(1, -12, 0, 14)
+spdLabel.Position = UDim2.new(0, 6, 0, 80)
+spdLabel.BackgroundTransparency = 1
+spdLabel.Text = "สปีด: " .. _G.FarmSpeed .. " m/s"
+spdLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
+spdLabel.Font = Enum.Font.Gotham
+spdLabel.TextSize = 11
+spdLabel.TextXAlignment = Enum.TextXAlignment.Left
+spdLabel.Parent = frame
+
+local bar = Instance.new("Frame")
+bar.Size = UDim2.new(1, -12, 0, 6)
+bar.Position = UDim2.new(0, 6, 0, 96)
+bar.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+bar.BorderSizePixel = 0
+bar.Parent = frame
+Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new((_G.FarmSpeed - 48) / 44, 0, 1, 0)
+fill.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+fill.BorderSizePixel = 0
+fill.Parent = bar
+Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+local drag = false
+bar.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local r = math.clamp((i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        local v = math.floor(48 + r * 44)
+        _G.FarmSpeed = v
+        fill.Size = UDim2.new(r, 0, 1, 0)
+        spdLabel.Text = "สปีด: " .. v .. " m/s"
+    end
+end)
+
+btn.MouseButton1Click:Connect(function()
+    _G.AutoFarm = not _G.AutoFarm
+    if _G.AutoFarm then
+        running = true
+        btn.Text = "ปิดฟาร์ม"
+        btn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        status.Text = "สถานะ: กำลังฟาร์ม"
+        status.TextColor3 = Color3.fromRGB(80, 220, 80)
+    else
+        running = false
+        stopAD()
+        btn.Text = "เปิดฟาร์ม"
+        btn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+        status.Text = "สถานะ: ปิด"
+        status.TextColor3 = Color3.fromRGB(180, 180, 180)
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(i, g)
+    if g then return end
+    if i.KeyCode == Enum.KeyCode.RightShift then
+        frame.Visible = not frame.Visible
+    end
+end)
+
 task.spawn(function()
     while true do
         if _G.AutoFarm then
-            if not running then
-                running = true
-                print("[StealthFarm] ON | speed", _G.FarmSpeed)
-            end
-            local ok, err = pcall(cycle)
+            if not running then running = true end
+            local ok = pcall(cycle)
             if not ok then
                 stopAD()
                 waitHuman(1.2, 2.4)
@@ -336,14 +450,10 @@ task.spawn(function()
             if running then
                 running = false
                 stopAD()
-                print("[StealthFarm] OFF")
             end
-            task.wait(0.4)
+            task.wait(0.35)
         end
     end
 end)
 
-print("[StealthFarm] loaded")
-print("เริ่ม: _G.AutoFarm = true")
-print("หยุด: _G.AutoFarm = false")
-print("สปีด: _G.FarmSpeed = 70")
+print("[StealthFarm] loaded | RightShift ซ่อนเมนู")
