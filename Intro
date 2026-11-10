@@ -2,11 +2,11 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Min R / Lv.20 Party Taxi v23.0)
-    - ธีมสีแดงดำ สไตล์ MSX HUB
+    MSX HUB - Raycity RB Auto Quest Bot (Phase 1 & 2 Selector v24.0)
+    - มีปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R) บน GUI
     - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 500 studs)
     - ระบบหยุดนิ่งสนิท 100% (Total Lockdown at STOP)
-    - Webhook Discord แจ้งเตือนเมื่อจบรอบ
+    - ไม่มี Webhook
     ====================================================================
 --]]
 
@@ -16,16 +16,38 @@ if _G.RaycityAutoQuestStop then
 end
 
 local CONFIG = {
+    -- 🛑 ข้อมูลเควส Phase 1: Derix (Lv.4 Road Fight)
+    PHASE1 = {
+        NAME = "Derix - รอบ 1 (Lv.4 Road Fight)",
+        QUEST_ID = "R1676",
+        NPC_ID = "roadfight:1676",
+        NPC_NAME = "Npc_931676",
+        NPC_POS = Vector3.new(-1225.35, 40.34, -5316.00),
+        PARK_POS = Vector3.new(-1228.63, 41.74, -5315.22),
+        CRUISE_SPEED_MPS = 98,
+        SLOT = 1,
+        IS_ROADFIGHT = true,
+    },
+    -- 🛑 ข้อมูลเควส Phase 2: Min R (Lv.20 Party Taxi)
+    PHASE2 = {
+        NAME = "Min R (Lv.20 Party Taxi / S105)",
+        QUEST_ID = "S105",
+        NPC_ID = "mission24:105",
+        NPC_NAME = "Npc_940105",
+        NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
+        PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
+        CRUISE_SPEED_MPS = 99,
+        SLOT = nil,
+        IS_ROADFIGHT = false,
+    },
+
+    -- ค่าเริ่มต้น (จะถูกอัปเดตตาม Phase ที่เลือก)
     QUEST_ID = "S105",
     NPC_ID = "mission24:105",
     NPC_NAME = "Npc_940105",
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-
     CRUISE_SPEED_MPS = 99,
-    CAP1_SPEED = 82.0,
-    CAP2_SPEED = 56.0,
-    CAP3_SPEED = 28.0,
 
     ENABLE_AUTO_BOOST = true,
     ENABLE_CORNERING_ASSIST = true,
@@ -46,10 +68,6 @@ local CONFIG = {
     ACCEPT_DELAY_BOARDED = 0.03,
     ACCEPT_POLL_INTERVAL = 0.02,
     ACCEPT_POLL_MAX = 50,
-
-    -- 🌐 Webhook Discord
-    WEBHOOK_URL = "", -- ใส่ URL เว็บฮุคของเจ้าตรงนี้
-    ENABLE_WEBHOOK = true,
 
     ENABLE_AUTO_REFUEL = true,
     REFUEL_BEFORE_QUEST_PCT = 0.08,
@@ -84,6 +102,20 @@ local CONFIG = {
     },
     ENABLE_MINIMIZE_FIX = true,
 }
+
+-- ตัวแปรสำหรับเลือก Phase (true = Phase 1, false = Phase 2)
+local isPhase1 = false
+
+-- ฟังก์ชันอัปเดต CONFIG ตาม Phase ที่เลือก
+local function updatePhaseConfig()
+    local phaseCfg = isPhase1 and CONFIG.PHASE1 or CONFIG.PHASE2
+    CONFIG.QUEST_ID = phaseCfg.QUEST_ID
+    CONFIG.NPC_ID = phaseCfg.NPC_ID
+    CONFIG.NPC_NAME = phaseCfg.NPC_NAME
+    CONFIG.NPC_POS = phaseCfg.NPC_POS
+    CONFIG.PARK_POS = phaseCfg.PARK_POS
+    CONFIG.CRUISE_SPEED_MPS = phaseCfg.CRUISE_SPEED_MPS
+end
 
 local STATS = {
     totalRain = 0,
@@ -120,6 +152,7 @@ local Remotes = RBRCQuest:WaitForChild("Remotes", 10)
 if not Remotes then warn("[MSX HUB] Error: ไม่พบ Remotes"); return end
 local QuestRequest = Remotes:WaitForChild("QuestRequest", 10)
 local QuestEventUp = Remotes:FindFirstChild("QuestEventUp")
+local RoadFightRequest = Remotes:FindFirstChild("RoadFightRequest")
 
 local QuestDataModule = RBRCQuest:WaitForChild("QuestData", 10)
 if not QuestDataModule then warn("[MSX HUB] Error: ไม่พบ QuestData"); return end
@@ -1307,21 +1340,40 @@ local function ensureQuestAccepted()
         end
         startNpcPositionHold()
         
-        if QuestRequest then
-            pcall(function()
-                QuestRequest:InvokeServer({ op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos })
-            end)
-            task.wait(CONFIG.ACCEPT_DELAY_TALK)
-            pcall(function()
-                QuestRequest:InvokeServer({ op = "accept", questId = CONFIG.QUEST_ID, npcId = CONFIG.NPC_ID, carPos = carPos })
-            end)
-            task.wait(CONFIG.ACCEPT_DELAY_ACCEPT)
-            pcall(function()
-                QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID, carPos = carPos })
-            end)
+        if CONFIG.IS_ROADFIGHT then
+            if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
+            if QuestRequest then
+                pcall(function()
+                    QuestRequest:InvokeServer({op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos})
+                end)
+            end
+            task.wait(0.15)
+            local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
+            if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
+                pcall(function() QuestUI._offerAnswer(true) end)
+            end
+            if RoadFightRequest then
+                pcall(function()
+                    RoadFightRequest:InvokeServer({op = "accept", npcId = CONFIG.NPC_ID, slot = CONFIG.SLOT or 1})
+                end)
+            end
+        else
+            if QuestRequest then
+                pcall(function()
+                    QuestRequest:InvokeServer({ op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos })
+                end)
+                task.wait(CONFIG.ACCEPT_DELAY_TALK)
+                pcall(function()
+                    QuestRequest:InvokeServer({ op = "accept", questId = CONFIG.QUEST_ID, npcId = CONFIG.NPC_ID, carPos = carPos })
+                end)
+                task.wait(CONFIG.ACCEPT_DELAY_ACCEPT)
+                pcall(function()
+                    QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID, carPos = carPos })
+                end)
+            end
+            local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
+            if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
         end
-        local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
-        if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
         
         local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
         
@@ -1446,40 +1498,6 @@ local function runOneQuestCycle()
                 STATS.totalCycleTime = STATS.totalCycleTime + cycleDuration
                 STATS.avgCycleTime = STATS.totalCycleTime / STATS.totalCycles
                 print(string.format("[MSX HUB] รอบที่ %d ใช้เวลา %.2f วินาที (เฉลี่ย %.2f วิ/รอบ)", STATS.totalCycles, cycleDuration, STATS.avgCycleTime))
-                
-                -- 🌐 ส่งแจ้งเตือน Webhook
-                if CONFIG.ENABLE_WEBHOOK and CONFIG.WEBHOOK_URL ~= "" then
-                    local webhookData = {
-                        ["content"] = "✅ **จบรอบเควสแล้ว!**",
-                        ["embeds"] = {
-                            {
-                                ["title"] = "📊 MSX HUB - รายงานผลรอบที่ " .. STATS.totalCycles,
-                                ["color"] = 16711680,
-                                ["fields"] = {
-                                    { ["name"] = "⏱ เวลาที่ใช้", ["value"] = string.format("%.2f วินาที", cycleDuration), ["inline"] = true },
-                                    { ["name"] = "💰 เงินรวมทั้งหมด", ["value"] = tostring(STATS.totalRain) .. " Rain", ["inline"] = true },
-                                    { ["name"] = "🏁 รอบที่จบ", ["value"] = tostring(STATS.totalCycles) .. " รอบ", ["inline"] = true },
-                                    { ["name"] = "⏳ เวลาเฉลี่ย/รอบ", ["value"] = string.format("%.2f วินาที", STATS.avgCycleTime), ["inline"] = true },
-                                },
-                                ["footer"] = { ["text"] = "MSX HUB | Raycity RB" },
-                                ["timestamp"] = DateTime.now():ToIsoDate()
-                            }
-                        }
-                    }
-                    pcall(function()
-                        local HttpService = game:GetService("HttpService")
-                        local jsonData = HttpService:JSONEncode(webhookData)
-                        local request = syn and syn.request or http_request or request or HttpRequest
-                        if request then
-                            request({
-                                Url = CONFIG.WEBHOOK_URL,
-                                Method = "POST",
-                                Headers = { ["Content-Type"] = "application/json" },
-                                Body = jsonData
-                            })
-                        end
-                    end)
-                end
                 
                 break
             elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
@@ -1726,8 +1744,8 @@ ScreenGui.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 _G.RaycityQuestGui = ScreenGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 360)
-MainFrame.Position = UDim2.new(0, 20, 0.5, -180)
+MainFrame.Size = UDim2.new(0, 300, 0, 410)
+MainFrame.Position = UDim2.new(0, 20, 0.5, -205)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -1829,9 +1847,24 @@ AvgTimeLabel.Font = Enum.Font.GothamSemibold
 AvgTimeLabel.TextXAlignment = Enum.TextXAlignment.Left
 AvgTimeLabel.Parent = StatsFrame
 
+local PhaseBtn = Instance.new("TextButton")
+PhaseBtn.Size = UDim2.new(1, -20, 0, 35)
+PhaseBtn.Position = UDim2.new(0, 10, 0, 215)
+PhaseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200)
+PhaseBtn.Text = "Phase 2: Min R"
+PhaseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PhaseBtn.TextScaled = true
+PhaseBtn.Font = Enum.Font.GothamBold
+PhaseBtn.AutoButtonColor = false
+PhaseBtn.Parent = MainFrame
+
+local phaseCorner = Instance.new("UICorner")
+phaseCorner.CornerRadius = UDim.new(0, 6)
+phaseCorner.Parent = PhaseBtn
+
 local ToggleSellBtn = Instance.new("TextButton")
 ToggleSellBtn.Size = UDim2.new(1, -20, 0, 35)
-ToggleSellBtn.Position = UDim2.new(0, 10, 0, 215)
+ToggleSellBtn.Position = UDim2.new(0, 10, 0, 260)
 ToggleSellBtn.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
 ToggleSellBtn.Text = "💰 AUTO-SELL: ON"
 ToggleSellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1900,6 +1933,17 @@ local function setSellButtonState(enabled)
     end
 end
 
+local function setPhaseButtonState()
+    if isPhase1 then
+        PhaseBtn.Text = "Phase 1: Derix"
+        PhaseBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 200) -- สีม่วง
+    else
+        PhaseBtn.Text = "Phase 2: Min R"
+        PhaseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200) -- สีน้ำเงิน
+    end
+    updatePhaseConfig()
+end
+
 local function updateStats()
     if not STATS.startTime then return end
     local elapsed = os.time() - STATS.startTime
@@ -1930,6 +1974,12 @@ task.spawn(function()
             pcall(updateStats)
         end
     end
+end)
+
+PhaseBtn.MouseButton1Click:Connect(function()
+    isPhase1 = not isPhase1
+    setPhaseButtonState()
+    print(string.format("[MSX HUB] เปลี่ยนเป็น %s", isPhase1 and "Phase 1 (Derix)" or "Phase 2 (Min R)"))
 end)
 
 ToggleSellBtn.MouseButton1Click:Connect(function()
@@ -1967,7 +2017,7 @@ local function startBot()
         while _G.AutoQuestRunning do
             local currentLv = getPlayerLevel()
             cycleCount = cycleCount + 1
-            print(string.format("\n>>> CYCLE Min R Lv.20 (#%d) [Lv.%d] <<<", cycleCount, currentLv))
+            print(string.format("\n>>> CYCLE (#%d) [Lv.%d] <<<", cycleCount, currentLv))
             local ok, err = pcall(runOneQuestCycle)
             if not ok then
                 warn("[MSX HUB] Error:", err)
@@ -2012,4 +2062,5 @@ end
 
 setButtonState(false)
 setSellButtonState(CONFIG.ENABLE_AUTO_SELL)
+setPhaseButtonState()
 print("[MSX HUB] GUI Red/Black Theme Loaded. Ready to farm!")
