@@ -6,7 +6,7 @@ if _G.RaycityAutoQuestStop then
 end
 
 local CONFIG = {
-    PHASE1_MAX_LEVEL = 16,               -- แก้บัค: เลเวล 17 ขึ้นไปสลับเฟสทันที
+    PHASE1_MAX_LEVEL = 17,               -- แก้บัค: เลเวล 17 ขึ้นไปสลับเฟสทันที
     PHASE2_MAX_LEVEL = 50,
 
     PHASE1 = {
