@@ -2208,42 +2208,56 @@ local function runOneQuestCycle()
             continue
         end
 
-        -- ระบบค่อยๆ ชะลอความเร็วเฉพาะช่วงใกล้จุด STOP (เริ่มชะลอตั้งแต่ระยะ 50 studs ลงไป)
+               -- ==================== Soft Brake เสถียร (เริ่มจาก 400 studs) ====================
         if activeObj.isStop and not isHoldingStopBox and carPosNow and carRoot then
-            if distToTarget <= 50 then
-                local targetSpeedKmh
-                if distToTarget > 25 then
-                    -- ระยะ 50 -> 25 studs: เริ่มชะลอความเร็วลงมาที่ประมาณ ~30-35 km/h
-                    targetSpeedKmh = 18.0 + (distToTarget - 25) * (17.0 / 25.0)
-                elseif distToTarget > 10 then
-                    -- ระยะ 25 -> 10 studs: ชะลอเหลือประมาณ ~18 km/h
-                    targetSpeedKmh = 8.0 + (distToTarget - 10) * (10.0 / 15.0)
-                elseif distToTarget > 5 then
-                    -- ระยะ 10 -> 5 studs: ไหลคลานช้าๆ ประมาณ ~8 km/h
-                    targetSpeedKmh = 4.0 + (distToTarget - 5) * (4.0 / 5.0)
+            local dist = distToTarget
+            local targetSpeed = CONFIG.CRUISE_SPEED_MPS
+
+            if dist <= 400 then
+                if dist > 200 then
+                    -- 400 → 200 : ลดเหลือ 75%
+                    targetSpeed = CONFIG.CRUISE_SPEED_MPS * 0.75
+                elseif dist > 120 then
+                    -- 200 → 120 : ลดเหลือ 55%
+                    targetSpeed = CONFIG.CRUISE_SPEED_MPS * 0.55
+                elseif dist > 70 then
+                    -- 120 → 70 : ลดเหลือ 35%
+                    targetSpeed = CONFIG.CRUISE_SPEED_MPS * 0.35
+                elseif dist > 40 then
+                    -- 70 → 40 : ลดเหลือ 22%
+                    targetSpeed = CONFIG.CRUISE_SPEED_MPS * 0.22
+                elseif dist > 20 then
+                    -- 40 → 20 : คลาน
+                    targetSpeed = 9.0
+                elseif dist > 10 then
+                    -- 20 → 10
+                    targetSpeed = 5.5
                 else
-                    -- ระยะ 5 studs ลงไป: คลานเบาๆ ประมาณ ~4 km/h เข้าสู่ใจกลางกล่อง
-                    targetSpeedKmh = 4.0
+                    -- ต่ำกว่า 10 : ช้ามาก
+                    targetSpeed = 3.2
+                end
+            end
+
+            AutoDrive.C.maxSpeed = targetSpeed
+
+            local rel = carRoot.CFrame:PointToObjectSpace(activeObj.target)
+            if rcd and rcd.phys then
+                local currentSpeed = rcd.phys.v and rcd.phys.v.Magnitude or 0
+
+                if currentSpeed > targetSpeed + 2.0 then
+                    -- เบรกนุ่ม ไม่กระตุก
+                    local brakeAmt = math.clamp((currentSpeed - targetSpeed) / 12.0, 0.2, 0.75)
+                    rcd.phys.throttle = 0
+                    rcd.phys.brake = brakeAmt
+                else
+                    -- ความเร็วใกล้เป้าแล้ว ให้ไหลเข้า
+                    local throttleAmt = math.clamp(targetSpeed / 18.0, 0.08, 0.35)
+                    rcd.phys.throttle = throttleAmt
+                    rcd.phys.brake = 0
                 end
 
-                AutoDrive.C.maxSpeed = targetSpeedKmh / 3.6
-
-                local rel = carRoot.CFrame:PointToObjectSpace(activeObj.target)
-                if rcd and rcd.phys then
-                    if speedKmh > (targetSpeedKmh + 2.0) then
-                        -- ความเร็วเกินเป้าหมาย -> ค่อยๆ แตะเบรกชะลอลงอย่างนุ่มนวล
-                        local brakeAmt = math.clamp((speedKmh - targetSpeedKmh) / 10.0, 0.25, 0.85)
-                        rcd.phys.throttle = 0
-                        rcd.phys.brake = brakeAmt
-                    else
-                        -- ความเร็วช้าเกินไป -> เติมคันเร่งเบาๆ ประคองส่งตัวเข้ากึ่งกลางกล่อง
-                        local throttleAmt = math.clamp(targetSpeedKmh / 22.0, 0.15, 0.45)
-                        rcd.phys.throttle = throttleAmt
-                        rcd.phys.brake = 0
-                    end
-                    -- บังคับเลี้ยวตรงเข้าสู่จุดกึ่งกลางกล่อง
-                    rcd.phys.steerIn = math.clamp(rel.X * 0.18, -0.65, 0.65)
-                end
+                -- เลี้ยวเข้าจุดกลางแบบนุ่ม
+                rcd.phys.steerIn = math.clamp(rel.X * 0.14, -0.55, 0.55)
             end
         end
 
