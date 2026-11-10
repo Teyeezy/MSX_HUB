@@ -1,26 +1,28 @@
 repeat task.wait() until game:IsLoaded()
-task.wait(1.5)
+task.wait(1.2)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 _G.AutoFarm = false
-_G.FarmSpeed = 74
+_G.FarmSpeed = 76
 local running = false
 
 local CFG = {
-    AcceptMaxTry = 8,
-    StuckSec = 4.2,
-    ChkTimeout = 85,
-    MinLoopWait = 2.8,
-    MaxLoopWait = 6.5,
-    SpeedJitter = 9,
-    ThinkMin = 0.35,
-    ThinkMax = 1.4,
+    AcceptMaxTry = 10,
+    StuckSec = 3.8,
+    ChkTimeout = 80,
+    MinLoopWait = 2.5,
+    MaxLoopWait = 5.8,
+    SpeedJitter = 8,
+    ThinkMin = 0.4,
+    ThinkMax = 1.3,
 }
 
+-- Phase จากสคริปต์อ้างอิง
 local P1 = {
     id = "R1676",
     npc = "roadfight:1676",
@@ -42,21 +44,19 @@ local P2 = {
 
 local phase = P1
 
+-- Services
 local RBRCQuest = ReplicatedStorage:WaitForChild("RBRCQuest", 20)
 local Remotes = RBRCQuest:WaitForChild("Remotes", 15)
 local QuestRequest = Remotes:WaitForChild("QuestRequest", 10)
 local RoadFightRequest = Remotes:FindFirstChild("RoadFightRequest")
+local QuestEventUp = Remotes:FindFirstChild("QuestEventUp")
 
 local RaycityUi = ReplicatedStorage:WaitForChild("RaycityUi", 20)
 local AutoDrive = require(RaycityUi:WaitForChild("AutoDrive", 15))
 
-local function rng(a, b)
-    return a + math.random() * (b - a)
-end
-
-local function waitHuman(a, b)
-    task.wait(rng(a, b))
-end
+-- Utils
+local function rng(a, b) return a + math.random() * (b - a) end
+local function waitHuman(a, b) task.wait(rng(a, b)) end
 
 local function getLv()
     local ok, v = pcall(function()
@@ -87,12 +87,11 @@ local function questState()
     return nil
 end
 
-local function setSpeed(base)
-    local jitter = rng(-CFG.SpeedJitter, CFG.SpeedJitter)
-    local spd = math.clamp((base or _G.FarmSpeed) + jitter, 48, 92)
+local function setSpeed()
+    local spd = math.clamp(_G.FarmSpeed + rng(-CFG.SpeedJitter, CFG.SpeedJitter), 50, 90)
     AutoDrive.C.maxSpeed = spd
-    AutoDrive.C.nearDestM = 1.6
-    AutoDrive.C.arriveNearM = 2.6
+    AutoDrive.C.nearDestM = 1.5
+    AutoDrive.C.arriveNearM = 2.5
     AutoDrive.options.arriveBrake = false
     AutoDrive.options.evasions = false
     AutoDrive.options.aiDrift = false
@@ -105,11 +104,11 @@ local function stopAD()
     pcall(function() AutoDrive.stop("ok") end)
 end
 
+-- ขับไปจุดหมาย (ใช้ AutoDrive เนทีฟ)
 local function goTo(target, timeout)
-    timeout = timeout or 95
+    timeout = timeout or 90
     setSpeed()
-    local ok = AutoDrive.request(target, {snap = false, stopNavOnCancel = false})
-    if not ok then return false end
+    if not AutoDrive.request(target, {snap = false, stopNavOnCancel = false}) then return false end
     AutoDrive.start()
 
     local t0 = os.clock()
@@ -117,12 +116,12 @@ local function goTo(target, timeout)
     local lastMove = os.clock()
 
     while running and _G.AutoFarm do
-        task.wait(0.11)
+        task.wait(0.1)
         local now = carPos()
         if not now then break end
-
         local d = (now - target).Magnitude
-        if d <= 7.5 then
+
+        if d <= 7.2 then
             stopAD()
             local rcd = shared.RCDrive
             if rcd and rcd.phys then
@@ -130,7 +129,7 @@ local function goTo(target, timeout)
                 rcd.phys.brake = 1
                 rcd.phys.v = Vector3.zero
             end
-            waitHuman(0.25, 0.55)
+            waitHuman(0.2, 0.5)
             return true
         end
 
@@ -139,11 +138,8 @@ local function goTo(target, timeout)
             lastMove = os.clock()
         elseif d > 14 and os.clock() - lastMove > CFG.StuckSec then
             local rcd = shared.RCDrive
-            if rcd and rcd.phys then
-                rcd.phys.throttle = -0.45
-                rcd.phys.brake = 0
-            end
-            waitHuman(0.6, 1.0)
+            if rcd and rcd.phys then rcd.phys.throttle = -0.4 end
+            waitHuman(0.55, 0.95)
             AutoDrive.request(target, {snap = false})
             AutoDrive.start()
             lastMove = os.clock()
@@ -162,8 +158,9 @@ local function goTo(target, timeout)
     return false
 end
 
+-- รับเควส
 local function accept()
-    for try = 1, CFG.AcceptMaxTry do
+    for _ = 1, CFG.AcceptMaxTry do
         if not running or not _G.AutoFarm then return false end
 
         local st = questState()
@@ -177,10 +174,9 @@ local function accept()
             continue
         end
 
-        local dist = (pos - phase.pos).Magnitude
-        if dist > 9 then
-            if not goTo(phase.pos, 90) then
-                waitHuman(0.6, 1.2)
+        if (pos - phase.pos).Magnitude > 9 then
+            if not goTo(phase.pos, 85) then
+                waitHuman(0.6, 1.1)
                 continue
             end
             pos = carPos()
@@ -191,21 +187,21 @@ local function accept()
         pcall(function()
             if phase.road then
                 QuestRequest:InvokeServer({op = "talk", npcId = phase.npc, carPos = pos})
-                waitHuman(0.18, 0.35)
+                waitHuman(0.16, 0.32)
                 if RoadFightRequest then
                     RoadFightRequest:InvokeServer({op = "accept", npcId = phase.npc, slot = phase.slot or 1})
                 end
             else
                 QuestRequest:InvokeServer({op = "talk", npcId = phase.npc, carPos = pos})
-                waitHuman(0.15, 0.28)
+                waitHuman(0.14, 0.26)
                 QuestRequest:InvokeServer({op = "accept", questId = phase.id, npcId = phase.npc, carPos = pos})
-                waitHuman(0.12, 0.25)
+                waitHuman(0.12, 0.22)
                 QuestRequest:InvokeServer({op = "boarded", questId = phase.id, carPos = pos})
             end
         end)
 
-        for _ = 1, 22 do
-            waitHuman(0.09, 0.16)
+        for _ = 1, 20 do
+            waitHuman(0.09, 0.15)
             st = questState()
             if st and st.questId == phase.id then
                 if st.state == "running" then return true end
@@ -216,7 +212,7 @@ local function accept()
                 end
             end
         end
-        waitHuman(0.5, 1.1)
+        waitHuman(0.45, 1.0)
     end
     return false
 end
@@ -238,12 +234,13 @@ local function activeObj(st)
     return nil
 end
 
+-- รอบเควส
 local function cycle()
     local lv = getLv()
     phase = (lv < P1.maxLv) and P1 or P2
 
     if not accept() then
-        waitHuman(1.8, 3.2)
+        waitHuman(1.6, 3.0)
         return
     end
 
@@ -253,16 +250,14 @@ local function cycle()
     local lastM = os.clock()
 
     while running and _G.AutoFarm do
-        task.wait(0.12)
+        task.wait(0.11)
 
         local st = questState()
-        if not st or (st.state ~= "running" and st.state ~= "boarding") then
-            break
-        end
+        if not st or (st.state ~= "running" and st.state ~= "boarding") then break end
 
         local act = activeObj(st)
         if not act then
-            task.wait(0.15)
+            task.wait(0.12)
             continue
         end
 
@@ -281,29 +276,27 @@ local function cycle()
         local rcd = shared.RCDrive
         local spd = rcd and rcd.phys and rcd.phys.v and rcd.phys.v.Magnitude * 3.6 or 0
 
-        if isStop and d < 45 then
-            AutoDrive.C.maxSpeed = math.clamp(d * 0.55, 3.5, _G.FarmSpeed * 0.35)
+        if isStop and d < 42 then
+            AutoDrive.C.maxSpeed = math.clamp(d * 0.5, 3.5, _G.FarmSpeed * 0.32)
         end
 
-        if isStop and d <= 5.5 then
+        if isStop and d <= 5.2 then
             stopAD()
             if rcd and rcd.phys then
                 rcd.phys.throttle = 0
                 rcd.phys.brake = 1
                 rcd.phys.v = Vector3.zero
             end
-            waitHuman(0.4, 0.9)
+            waitHuman(0.35, 0.8)
             break
         end
 
-        if lastP and (pos - lastP).Magnitude > 2.2 or spd > 6 then
+        if lastP and (pos - lastP).Magnitude > 2 or spd > 5 then
             lastP = pos
             lastM = os.clock()
         elseif d > 15 and os.clock() - lastM > CFG.StuckSec then
-            if rcd and rcd.phys then
-                rcd.phys.throttle = -0.4
-            end
-            waitHuman(0.55, 0.95)
+            if rcd and rcd.phys then rcd.phys.throttle = -0.35 end
+            waitHuman(0.5, 0.9)
             AutoDrive.request(curT, {snap = false})
             AutoDrive.start()
             lastM = os.clock()
@@ -320,14 +313,14 @@ local function cycle()
     waitHuman(CFG.MinLoopWait, CFG.MaxLoopWait)
 end
 
--- ==================== GUI ====================
+-- GUI เล็ก
 local gui = Instance.new("ScreenGui")
 gui.Name = "SF"
 gui.ResetOnSpawn = false
 gui.Parent = game.CoreGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 200, 0, 110)
+frame.Size = UDim2.new(0, 200, 0, 108)
 frame.Position = UDim2.new(0.5, -100, 0.12, 0)
 frame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 frame.BorderSizePixel = 0
@@ -373,7 +366,7 @@ local spdLabel = Instance.new("TextLabel")
 spdLabel.Size = UDim2.new(1, -12, 0, 14)
 spdLabel.Position = UDim2.new(0, 6, 0, 80)
 spdLabel.BackgroundTransparency = 1
-spdLabel.Text = "สปีด: " .. _G.FarmSpeed .. " m/s"
+spdLabel.Text = "สปีด: " .. _G.FarmSpeed
 spdLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
 spdLabel.Font = Enum.Font.Gotham
 spdLabel.TextSize = 11
@@ -389,7 +382,7 @@ bar.Parent = frame
 Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
 
 local fill = Instance.new("Frame")
-fill.Size = UDim2.new((_G.FarmSpeed - 48) / 44, 0, 1, 0)
+fill.Size = UDim2.new((_G.FarmSpeed - 50) / 40, 0, 1, 0)
 fill.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
 fill.BorderSizePixel = 0
 fill.Parent = bar
@@ -405,10 +398,10 @@ end)
 UserInputService.InputChanged:Connect(function(i)
     if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
         local r = math.clamp((i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        local v = math.floor(48 + r * 44)
+        local v = math.floor(50 + r * 40)
         _G.FarmSpeed = v
         fill.Size = UDim2.new(r, 0, 1, 0)
-        spdLabel.Text = "สปีด: " .. v .. " m/s"
+        spdLabel.Text = "สปีด: " .. v
     end
 end)
 
@@ -444,7 +437,7 @@ task.spawn(function()
             local ok = pcall(cycle)
             if not ok then
                 stopAD()
-                waitHuman(1.2, 2.4)
+                waitHuman(1.2, 2.2)
             end
         else
             if running then
