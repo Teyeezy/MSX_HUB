@@ -2,9 +2,10 @@ repeat task.wait(6) until game:IsLoaded()
 
 --[[
     ====================================================================
-    MSX HUB - Raycity RB Auto Quest Bot (Custom Drive v31.0)
-    - ระบบขับขี่ด้วยฟิสิกส์ตรงๆ ตามเส้นทาง Navigation (ไม่มี AutoDrive)
-    - ขับเนียนเหมือนมนุษย์: Micro-Steering Wobble
+    MSX HUB - Raycity RB Auto Quest Bot (Path Following Custom Drive v32.0)
+    - ขับตามเส้นทาง (Path Following) จาก Navigation Module
+    - ไม่ใช้ AutoDrive (ไม่มีอาการหยุดๆ หายๆ)
+    - มี Micro-Steering Wobble ให้ดูเหมือนมนุษย์
     - ความเร็ว 200 km/h (55.5 m/s)
     - ระบบ STOP: Distance-Based Linear Deceleration (เริ่มชะลอที่ 200 studs)
     - ปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R)
@@ -583,9 +584,7 @@ local function getActiveObjective(st)
     return nil
 end
 
-local unstuckDir = 1
 local function performUnstuck(targetPos)
-    pcall(function() AutoDrive.stop("unstuck") end)
     local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
     if rcd and rcd.phys then
         local myCF = getCarRoot() and getCarRoot().CFrame
@@ -593,9 +592,6 @@ local function performUnstuck(targetPos)
         if myCF and targetPos then
             local rel = myCF:PointToObjectSpace(targetPos)
             steer = (rel.X >= 0) and -0.55 or 0.55
-        else
-            unstuckDir = -unstuckDir
-            steer = 0.55 * unstuckDir
         end
         rcd.phys.brake = 0
         rcd.phys.throttle = -0.65
@@ -606,9 +602,6 @@ local function performUnstuck(targetPos)
         rcd.phys.brake = 1
         task.wait(0.12)
         rcd.phys.brake = 0
-    end
-    if targetPos and _G.AutoQuestRunning then
-        -- ไม่ต้องใช้ AutoDrive แล้ว
     end
 end
 
@@ -1257,7 +1250,27 @@ local function runOneQuestCycle()
         end
 
         if carRoot and rcd and rcd.phys then
-            local relDir = carRoot.CFrame:PointToObjectSpace(activeObj.target)
+            local targetPos = activeObj.target
+            -- 🛑 ใช้ Path จาก Navigation Module (ถ้ามี)
+            local nav = (getrenv and getrenv().shared.RaycityNavigation) or shared.RaycityNavigation
+            if nav and nav.getGuide then
+                local guide = nav.getGuide()
+                if guide and guide.path and #guide.path > 0 then
+                    local closestIdx = 1
+                    local minDist = math.huge
+                    for i, p in ipairs(guide.path) do
+                        local d = (carPosNow - p).Magnitude
+                        if d < minDist then
+                            minDist = d
+                            closestIdx = i
+                        end
+                    end
+                    local nextIdx = math.min(closestIdx + 1, #guide.path)
+                    targetPos = guide.path[nextIdx]
+                end
+            end
+
+            local relDir = carRoot.CFrame:PointToObjectSpace(targetPos)
             local steer = math.clamp(relDir.X * 2.5, -1, 1)
             steer = steer + currentWobble
 
