@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
-_G.AutoFarm = false
+_G.AutoFarm = true
 _G.FarmSpeed = 74
 local running = false
 
