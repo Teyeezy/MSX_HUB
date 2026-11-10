@@ -1,5 +1,4 @@
 repeat task.wait(6) until game:IsLoaded()
-
 --[[
     ====================================================================
     MSX HUB - Raycity RB Auto Quest Bot (v25.0 STABLE FARM)
