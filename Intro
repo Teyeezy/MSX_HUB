@@ -1,49 +1,16 @@
 repeat task.wait(6) until game:IsLoaded()
---[[
-    ====================================================================
-    Raycity RB - Auto Quest Bot (Sister Miran / S1 Auto-Loop v1.0)
-    Game: เรย์ซิตี้ RB (Place ID: 117419079466193)
-    NPC: ซิสเตอร์มิแรน (Sister Miran / Npc_940001 / mission24:1)
-    เควส: S1 (Lv.40 Party Taxi - Reach the finish line before time runs out!)
-    ====================================================================
-    รายละเอียดเควส:
-      - พิกัด NPC ซิสเตอร์มิแรน (Sister Miran): Vector3.new(-7521.20, 66.80, 5331.80)
-      - จุดจอดเทียบข้างถนน: Vector3.new(-7523.42, 67.98, 5332.15)
-      - จำนวนเช็คพอยต์: ทั้งหมด 7 จุด (จุดผ่าน 6 จุด + จุดจอดเข้าเส้นชัย 1 จุด)
-          * เช็คพอยต์ 1 (Pass, Idx 5): Vector3.new(-6489.90, 37.70, 5748.65)
-          * เช็คพอยต์ 2 (Pass, Idx 6): Vector3.new(-385.65, 28.95, 8963.20)
-          * เช็คพอยต์ 3 (Pass, Idx 7): Vector3.new(6355.20, 40.60, 9254.25)
-          * เช็คพอยต์ 4 (Pass, Idx 8): Vector3.new(6199.95, 68.65, 5482.65)
-          * เช็คพอยต์ 5 (Pass, Idx 9): Vector3.new(1838.75, 43.05, 6861.45)
-          * เช็คพอยต์ 6 (Pass, Idx 10): Vector3.new(-568.40, 23.90, 4796.70)
-          * เช็คพอยต์ 7 (Stop, Idx 11): Vector3.new(-7370.05, 65.30, 5335.30)
-      - เส้นชัยอยู่ใกล้ซิสเตอร์มิแรนเพียง ~151 studs รับเควสต่อรอบใหม่ได้ทันที
-      - เวลาจำกัด: 300 วินาที (5 นาที)
-      - เงื่อนไขความพึงพอใจ:
-          * Thrill +572
-          * รักษาความเร็ว 280 กม./ชม. ขึ้นไป +155 (ระบบ AutoBoost รักษาสปีด 280-320+ km/h ตลอดเส้นทาง)
-          * ความเร็วต่ำกว่า 280 กม./ชม. -425
-          * Collision -548 (ระบบ Noclip Bypass ป้องกันการชนรถ NPC 100%)
 
-    คำสั่งควบคุม:
-      - สั่งหยุดบอทเมื่อใดก็ได้ใน executor: _G.AutoQuestRunning = false
-    ====================================================================
---]]
-
--- สั่งหยุดอินสแตนซ์เก่าก่อน (ถ้ามี)
 if _G.RaycityAutoQuestStop then
     pcall(_G.RaycityAutoQuestStop)
     task.wait(0.5)
 end
 
 local CONFIG = {
-    -- เงื่อนไขเลเวลเปลี่ยนเฟส
-        PHASE1_MAX_LEVEL = 17,               -- à¸Ÿà¸²à¸£à¹Œà¸¡ Derix à¸ˆà¸™à¸–à¸¶à¸‡à¹€à¸¥à¹€à¸§à¸¥ 17 à¹à¸¥à¹‰à¸§à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™à¹„à¸›à¸«à¸² Min R (Lv.20)
-    PHASE2_MAX_LEVEL = 30,               -- à¸Ÿà¸²à¸£à¹Œà¸¡ Min R à¸ˆà¸™à¸–à¸¶à¸‡à¹€à¸¥à¹€à¸§à¸¥ 30 à¹à¸¥à¹‰à¸§à¸«à¸¢à¸¸à¸”
+    PHASE1_MAX_LEVEL = 16,               -- แก้บัค: เลเวล 17 ขึ้นไปสลับเฟสทันที
+    PHASE2_MAX_LEVEL = 50,
 
-    -- à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¹€à¸„à¸§à¸ª à¹€à¸Ÿà¸ª 1: à¸ˆà¸­à¸«à¹Œà¸™ à¹€à¸”à¸­à¸£à¹Œà¸£à¸´à¸ (John Deric) à¸£à¸­à¸š 1 (Road Fight Lv.4)
     PHASE1 = {
-        NAME = "Derix - à¸£à¸­à¸š 1 (Lv.4 Road Fight)",
+        NAME = "Derix - รอบ 1 (Lv.4 Road Fight)",
         QUEST_ID = "R1676",
         NPC_ID = "roadfight:1676",
         NPC_NAME = "Npc_931676",
@@ -54,7 +21,6 @@ local CONFIG = {
         IS_ROADFIGHT = true,
     },
 
-    -- à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¹€à¸„à¸§à¸ª à¹€à¸Ÿà¸ª 2: à¸¡à¸´à¸™à¸­à¸²à¸£à¹Œ (Min R / Lv.20 Party Taxi)
     PHASE2 = {
         NAME = "Min R (Lv.20 Party Taxi / S105)",
         QUEST_ID = "S105",
@@ -67,32 +33,30 @@ local CONFIG = {
         IS_ROADFIGHT = false,
     },
 
-    -- à¸•à¸±à¸§à¹à¸›à¸£à¸—à¸³à¸‡à¸²à¸™à¸›à¸±à¸ˆà¸ˆà¸¸à¸šà¸±à¸™ (à¸ˆà¸°à¸–à¸¹à¸à¸­à¸±à¸›à¹€à¸”à¸•à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¸•à¸²à¸¡à¹€à¸¥à¹€à¸§à¸¥)
     QUEST_ID = "S105",
     NPC_ID = "mission24:105",
     NPC_NAME = "Npc_940105",
     NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
     PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
-    -- ขับขี่และความเร็วทั่วไป
-    CRUISE_SPEED_MPS = 99,               -- ความเร็วเดินทางมาตรฐาน (97 m/s ≈ 349.2 km/h)
-    ENABLE_AUTO_BOOST = true,            -- เปิดระบบกดเทอร์โบอัตโนมัติบนทางตรง
-    ENABLE_LANE_SWITCH = false,          -- ปิดระบบสไลด์ข้าง ป้องกันรถสะบัดหลุดเลน
-    ENABLE_CORNERING_ASSIST = true,      -- เปิดระบบช่วยเกาะถนน ดูดซับแรงไถลไม่ให้หลุดโค้ง
-    ENABLE_ANTI_AFK = true,              -- ป้องกันการหลุด AFK 20 นาที
-    ENABLE_AUTO_THRILL = true,           -- ส่งแต้ม Thrill อัตโนมัติระหว่างทาง (+572 แต้ม)
-    LANE_DETECT_DIST = 35,               -- ระยะสแกนรถข้างหน้า (studs)
-    LANE_SIDE_DETECT_DIST = 2,           -- ระยะสแกนด้านข้าง (studs)
-    LANE_SWITCH_COOLDOWN = 1.0,          -- คูลดาวน์สลับเลน (วินาที)
-    LOOP_DELAY = 0.2,                    -- พักรอบเพียง 0.2 วินาที (แก้ปัญหารอนาน)
-    TIMEOUT_PER_CHK = 65,                -- เวลา Timeout สูงสุดต่อเช็คพอยต์ (วินาที)
-    STUCK_TIME_SEC = 2.5,                -- ถ้ารถติดหยุดนิ่งเกิน 2.5 วินาทีให้ถอยแก้ติดทันที
-    MAX_ACCEPT_RETRIES = 15,             -- จำนวนรอบพยายามรับเควส
-    QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,   -- แก้ปัญหารอนาน: ตัดรอบจบเควสทันทีใน 2.0 วินาที ไม่ต้องรอค้าง 25 วินาที
 
-    -- ระบบเติมน้ำมันอัตโนมัติ (Auto-Refuel System)
-    ENABLE_AUTO_REFUEL = true,           -- ตรวจเช็คและขับไปเติมน้ำมันอัตโนมัติเมื่อใกล้หมด
-    REFUEL_BEFORE_QUEST_PCT = 0.08,      -- ถ้าน้ำมันต่ำกว่า 8% ของถังให้แวะเติมก่อนรับเควส
-    REFUEL_BEFORE_QUEST_MIN_L = 15.0,    -- ปริมาณน้ำมันขั้นต่ำก่อนเริ่มเควส (ลิตร)
+    CRUISE_SPEED_MPS = 99,
+    ENABLE_AUTO_BOOST = true,
+    ENABLE_LANE_SWITCH = false,
+    ENABLE_CORNERING_ASSIST = true,
+    ENABLE_ANTI_AFK = true,
+    ENABLE_AUTO_THRILL = true,
+    LANE_DETECT_DIST = 35,
+    LANE_SIDE_DETECT_DIST = 2,
+    LANE_SWITCH_COOLDOWN = 1.0,
+    LOOP_DELAY = 1.5,                    -- เพิ่มหน่วงรอบ (เดิม 0.2)
+    TIMEOUT_PER_CHK = 65,
+    STUCK_TIME_SEC = 2.5,
+    MAX_ACCEPT_RETRIES = 6,              -- ลดจาก 15 ป้องกันยิงรัว
+    QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
+
+    ENABLE_AUTO_REFUEL = true,
+    REFUEL_BEFORE_QUEST_PCT = 0.08,
+    REFUEL_BEFORE_QUEST_MIN_L = 15.0,
     FUEL_STATIONS = {
         { npcId = 800043, modelName = "Npc_1730043", name = "Ume", pos = Vector3.new(6355.40, 40.60, 9220.60) },
         { npcId = 800045, modelName = "Npc_1730045", name = "Momo", pos = Vector3.new(13046.00, 57.20, 6115.80) },
@@ -100,89 +64,35 @@ local CONFIG = {
         { npcId = 90000,  modelName = "Npc_90000",   name = "D.K. 19", pos = Vector3.new(-9696.00, 29.00, -3804.80) },
     },
 
-    -- ระบบกดรับของดรอปอัตโนมัติ (Get All) และขายของในคลังอัตโนมัติ (พร้อมระบบยกเว้น Whitelist)
-    ENABLE_AUTO_LOOT = true,             -- เปิดระบบกดรับไอเทมดรอปหลังจบเควส (Get All) อัตโนมัติ
-    ENABLE_AUTO_SELL = true,             -- เปิดระบบขายของในคลังทั้งหมดอัตโนมัติ
-    SELL_BOUND_ITEMS = true,             -- ขายไอเทมในคลังรวมถึงของผูกมัด (ยกเว้นของใน Whitelist และกุญแจรถ)
-    PROTECT_ALL_MONEY_BOXES = true,      -- ตรวจจับและยกเว้นกล่อง/แคปซูล/ถุงสุ่มเงินรางวัลทั้งหมดในเกมอัตโนมัติ
-    KEEP_ITEM_IDS = {                    -- รายการ Item ID ห้ามขายเด็ดขาด (Whitelist / Do Not Sell)
-        [13746] = true,                  -- 🧧 [Event] ถุงอั่งเปา (ถุงแดงนำโชค / New Year Lucky Bag)
-        [12717] = true,                  -- 👨‍⚕️ Dr.Kim s Lucky Capsule
-        [12765] = true,                  -- 👨‍⚕️ Dr.Kim s Big Lucky Capsule
-        [12815] = true,                  -- 💊 Lucky Capsule
-        [12816] = true,                  -- 💎 Big Lucky Capsule (ลุ้นสูงสุด 50,000,000 Rain)
-        [13230] = true,                  -- 👨‍⚕️ Dr. Golgol s Big lucky capsule
-        [13231] = true,                  -- 👨‍⚕️ Dr. Golgol s lucky capsule
-        [13380] = true,                  -- 💊 Mega Capsule
-        [13835] = true,                  -- 💊 Mega Capsule II
-        [14385] = true,                  -- 💊 Mega Capsule III
-        [16316] = true,                  -- 💊 Mega Capsule IV
-        [13629] = true,                  -- 🎲 Dice Box
-        [14021] = true,                  -- 🎲 New Dice Box
-        [13272] = true,                  -- 🎲 Pink Dice Box
-        [13523] = true,                  -- 🧦 Lucky Red Socks
-        [13524] = true,                  -- 🧦 Lucky Blue Socks
-        [13525] = true,                  -- 🧦 Lucky Yellow Socks
-        [13662] = true,                  -- 🧦 Lucky Blue Sock
-        [13663] = true,                  -- 🧦 (KR)Lucky Blue Sock
-        [15715] = true,                  -- 🧦 [Set1]Santa Sock
-        [15716] = true,                  -- 🧦 [Set1]ถุงเท้า Snowman
-        [15717] = true,                  -- 🧦 [Set2]ถุงเท้า Santa
-        [15718] = true,                  -- 🧦 [Set2]ถุงเท้า Snowman
-        [18077] = true,                  -- 🧦 ถุงเท้าซานต้า
-        [14085] = true,                  -- 🎁 [Event]Gift Vouchers
-        [12766] = true,                  -- 🎁 [Event] Yui s Gift Box
-        [12769] = true,                  -- 🎁 [HK] Rain Gift Box
-        [13257] = true,                  -- 🎁 [Xtreme] Big Gift Box
-        [13258] = true,                  -- 🎁 [Xtreme] Gift Box
-        [14196] = true,                  -- 🎁 [Event] Gift Box of Thanks Giving
-        [15853] = true,                  -- 🎁 Celebration Gift Box
-        [16800] = true,                  -- 🎁 [Event]Gift Box 15 วัน
-        [16801] = true,                  -- 🎁 [Event]Gift Box 20 วัน
-        [16802] = true,                  -- 🎁 [Event]Gift Box 25 วัน
-        [16803] = true,                  -- 🎁 [Event]Gift Box 30 วัน
-        [19191] = true,                  -- 🎁 [Saver]Gift box
-        [19575] = true,                  -- 🎁 [Saver]Gift box
-        [15164] = true,                  -- 👵 คุณป้าแห่งความสุข, Ray City
-        [14388] = true,                  -- 🏎️ Lucky Racing Capsule of the Model
-        [11858] = true,                  -- 🎁 Gift Box
-        [11733] = true,                  -- 🎁 Gift Box II
-        [12640] = true,                  -- 🎁 Event Box
-        [12641] = true,                  -- 🎁 Lucky Box
-        [45074] = true,                  -- 🎁 Special Gift Box
-        [45078] = true,                  -- 🎁 Premium Gift Box
-        [45081] = true,                  -- 🎁 Deluxe Gift Box
-        [45050] = true,                  -- 🎁 Event Lucky Gift Box
+    ENABLE_AUTO_LOOT = true,
+    ENABLE_AUTO_SELL = true,
+    SELL_BOUND_ITEMS = true,
+    PROTECT_ALL_MONEY_BOXES = true,
+    KEEP_ITEM_IDS = {
+        [13746] = true, [12717] = true, [12765] = true, [12815] = true, [12816] = true,
+        [13230] = true, [13231] = true, [13380] = true, [13835] = true, [14385] = true,
+        [16316] = true, [13629] = true, [14021] = true, [13272] = true, [13523] = true,
+        [13524] = true, [13525] = true, [13662] = true, [13663] = true, [15715] = true,
+        [15716] = true, [15717] = true, [15718] = true, [18077] = true, [14085] = true,
+        [12766] = true, [12769] = true, [13257] = true, [13258] = true, [14196] = true,
+        [15853] = true, [16800] = true, [16801] = true, [16802] = true, [16803] = true,
+        [19191] = true, [19575] = true, [15164] = true, [14388] = true, [11858] = true,
+        [11733] = true, [12640] = true, [12641] = true, [45074] = true, [45078] = true,
+        [45081] = true, [45050] = true,
     },
-    KEEP_ITEM_NAMES = {                  -- คำที่ห้ามขายเมื่อพบในชื่อไอเทมหรือไอคอน
-        "ถุงอั่งเปา",
-        "อั่งเปา",
-        "NewYearLuckybag",
-        "Lucky Capsule",
-        "Big Lucky Capsule",
-        "Mega Capsule",
-        "Dice Box",
-        "Luckybag",
-        "Gift Box",
-        "Giftbox",
-        "Gift Vouchers",
-        "Voucher",
-        "Lucky Red Sock",
-        "Lucky Blue Sock",
-        "Lucky Yellow Sock",
-        "Sock",
-        "ถุงเท้า",
-        "คุณป้าแห่งความสุข",
-        "Dr.Kim",
-        "Golgol",
+    KEEP_ITEM_NAMES = {
+        "ถุงอั่งเปา", "อั่งเปา", "NewYearLuckybag", "Lucky Capsule", "Big Lucky Capsule",
+        "Mega Capsule", "Dice Box", "Luckybag", "Gift Box", "Giftbox", "Gift Vouchers",
+        "Voucher", "Lucky Red Sock", "Lucky Blue Sock", "Lucky Yellow Sock", "Sock",
+        "ถุงเท้า", "คุณป้าแห่งความสุข", "Dr.Kim", "Golgol",
     },
 
-    -- ระบบรองรับการพับจอ / ไม่อยู่หน้าจอ (Background / Minimize Mode Fix)
     ENABLE_MINIMIZE_FIX = true,
 }
 
 _G.AutoQuestRunning = true
 local isRunning = true
+
 
 -- Services
 local Players = game:GetService("Players")
