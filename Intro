@@ -1,7 +1,25 @@
+repeat task.wait(6) until game:IsLoaded()
 
---UI library designed and developed by Barlas discord: 5nqs
- 
+--[[
+    ====================================================================
+    TEY PRIVATE - Raycity RB Auto Quest Bot (Custom UI v34.0)
+    - UI ใหม่หรูหรา สไตล์ Neverlose แต่เปลี่ยนชื่อเป็น Tey Private
+    - ระบบขับขี่แบบ Path Following (ใช้ Navigation Module)
+    - Micro-Steering Wobble (ขับเนียนเหมือนมนุษย์)
+    - ความเร็ว 200 km/h (55.5 m/s)
+    - ระบบ STOP: Distance-Based Linear Deceleration (200 studs)
+    - ปุ่มสลับ Phase 1 (Derix) และ Phase 2 (Min R)
+    ====================================================================
+--]]
 
+if _G.RaycityAutoQuestStop then
+    pcall(_G.RaycityAutoQuestStop)
+    task.wait(0.5)
+end
+
+-- ============================================================
+-- 🎨 Tey Private UI (Based on Neverlose UI)
+-- ============================================================
 local Icons = {
     crosshairs = "rbxassetid://96677288280405",
     ghost      = "rbxassetid://95400397758754",
@@ -28,7 +46,7 @@ local FontURLs = {
 
 local function LoadFont(name)
     local ok, result = pcall(function()
-        local folder = "NeverloseUI"
+        local folder = "TeyPrivateUI"
         if isfolder and not isfolder(folder) then makefolder(folder) end
         local ttf = folder .. "/" .. name .. ".ttf"
         if not (isfile and isfile(ttf)) then
@@ -42,7 +60,7 @@ local function LoadFont(name)
         return Font.new(getcustomasset(json), Enum.FontWeight.Regular, Enum.FontStyle.Normal)
     end)
     if ok then return result end
-    warn("[NeverloseUI] font load failed (" .. name .. "): " .. tostring(result))
+    warn("[TeyPrivateUI] font load failed (" .. name .. "): " .. tostring(result))
     return nil
 end
 
@@ -145,7 +163,7 @@ function Library:CreateWindow(cfg)
     local Window = { Tabs = {}, CurrentTab = nil }
 
     local gui = New("ScreenGui", {
-        Name = "NeverloseUI",
+        Name = "TeyPrivateUI",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Global,
         IgnoreGuiInset = true,
@@ -153,7 +171,7 @@ function Library:CreateWindow(cfg)
     })
     Window.Gui = gui
 
-    local blur = New("BlurEffect", { Size = 0, Name = "NeverloseBlur", Parent = Lighting })
+    local blur = New("BlurEffect", { Size = 0, Name = "TeyPrivateBlur", Parent = Lighting })
     Tween(blur, 0.4, { Size = cfg.Blur or 12 })
 
     local main = New("Frame", {
@@ -182,7 +200,7 @@ function Library:CreateWindow(cfg)
     New("Frame", { Size = UDim2.fromOffset(520, 1), Position = UDim2.fromOffset(170, 60), BackgroundColor3 = Theme.WindowBg, BackgroundTransparency = 0.1, BorderSizePixel = 0, Parent = main })
     local contentBg = Panel(170, 61, 520, 439, -10, -10, 10, 10, 0)
 
-    local title = cfg.Title or "NEVERLOSE"
+    local title = cfg.Title or "TEY PRIVATE"
     Label({ Text = title, Font = Theme.FontBold, TextSize = 26, TextColor3 = Theme.Accent,
         TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.fromOffset(170, 30), Position = UDim2.fromOffset(15, 17), Parent = main })
     Label({ Text = title, Font = Theme.FontBold, TextSize = 26, TextColor3 = Theme.Text,
@@ -733,169 +751,1424 @@ function Library:CreateWindow(cfg)
     return Window
 end
 
+-- ============================================================
+-- ⚙️ ตัวแปร CONFIG และระบบหลัก
+-- ============================================================
+local CONFIG = {
+    PHASE1 = {
+        NAME = "Derix - รอบ 1 (Lv.4 Road Fight)",
+        QUEST_ID = "R1676",
+        NPC_ID = "roadfight:1676",
+        NPC_NAME = "Npc_931676",
+        NPC_POS = Vector3.new(-1225.35, 40.34, -5316.00),
+        PARK_POS = Vector3.new(-1228.63, 41.74, -5315.22),
+        CRUISE_SPEED_MPS = 55.5,
+        SLOT = 1,
+        IS_ROADFIGHT = true,
+    },
+    PHASE2 = {
+        NAME = "Min R (Lv.20 Party Taxi / S105)",
+        QUEST_ID = "S105",
+        NPC_ID = "mission24:105",
+        NPC_NAME = "Npc_940105",
+        NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
+        PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
+        CRUISE_SPEED_MPS = 55.5,
+        SLOT = nil,
+        IS_ROADFIGHT = false,
+    },
+    QUEST_ID = "S105",
+    NPC_ID = "mission24:105",
+    NPC_NAME = "Npc_940105",
+    NPC_POS = Vector3.new(2585.60, 56.60, -2067.60),
+    PARK_POS = Vector3.new(2580.66, 57.17, -2061.55),
+    CRUISE_SPEED_MPS = 55.5,
+    ENABLE_CORNERING_ASSIST = true,
+    ENABLE_ANTI_AFK = true,
+    ENABLE_AUTO_THRILL = true,
+    LOOP_DELAY = 0.0,
+    STOP_HOLD_TIME = 0.1,
+    QUEST_FINISH_CONFIRM_TIME = 5.0,
+    TIMEOUT_PER_CHK = 65,
+    STUCK_TIME_SEC = 2.5,
+    MAX_ACCEPT_RETRIES = 15,
+    QUEST_STATE_UNKNOWN_TIMEOUT = 2.0,
+    ACCEPT_DELAY_TALK = 0.03,
+    ACCEPT_DELAY_ACCEPT = 0.03,
+    ACCEPT_DELAY_BOARDED = 0.03,
+    ACCEPT_POLL_INTERVAL = 0.02,
+    ACCEPT_POLL_MAX = 50,
+    ENABLE_AUTO_REFUEL = true,
+    REFUEL_BEFORE_QUEST_PCT = 0.08,
+    REFUEL_BEFORE_QUEST_MIN_L = 15.0,
+    FUEL_STATIONS = {
+        { npcId = 800043, name = "Ume", pos = Vector3.new(6355.40, 40.60, 9220.60) },
+        { npcId = 800045, name = "Momo", pos = Vector3.new(13046.00, 57.20, 6115.80) },
+        { npcId = 2008,   name = "Yuka", pos = Vector3.new(-9346.40, 28.40, -3290.80) },
+        { npcId = 90000,  name = "D.K. 19", pos = Vector3.new(-9696.00, 29.00, -3804.80) },
+    },
+    ENABLE_AUTO_LOOT = true,
+    ENABLE_AUTO_SELL = true,
+    SELL_BOUND_ITEMS = true,
+    KEEP_ITEM_IDS = {
+        [13746] = true, [12717] = true, [12765] = true, [12815] = true, [12816] = true,
+        [13230] = true, [13231] = true, [13380] = true, [13835] = true, [14385] = true,
+        [16316] = true, [13629] = true, [14021] = true, [13272] = true, [13523] = true,
+        [13524] = true, [13525] = true, [13662] = true, [13663] = true, [15715] = true,
+        [15716] = true, [15717] = true, [15718] = true, [18077] = true, [14085] = true,
+        [12766] = true, [12769] = true, [13257] = true, [13258] = true, [14196] = true,
+        [15853] = true, [16800] = true, [16801] = true, [16802] = true, [16803] = true,
+        [19191] = true, [19575] = true, [15164] = true, [14388] = true, [11858] = true,
+        [11733] = true, [12640] = true, [12641] = true, [45074] = true, [45078] = true,
+        [45081] = true, [45050] = true,
+    },
+    KEEP_ITEM_NAMES = {
+        "ถุงอั่งเปา", "อั่งเปา", "NewYearLuckybag", "Lucky Capsule", "Big Lucky Capsule",
+        "Mega Capsule", "Dice Box", "Luckybag", "Gift Box", "Giftbox", "Gift Vouchers",
+        "Voucher", "Lucky Red Sock", "Lucky Blue Sock", "Lucky Yellow Sock", "Sock",
+        "ถุงเท้า", "คุณป้าแห่งความสุข", "Dr.Kim", "Golgol",
+    },
+    ENABLE_MINIMIZE_FIX = true,
+}
+
+local isPhase1 = false
+local function updatePhaseConfig()
+    local phaseCfg = isPhase1 and CONFIG.PHASE1 or CONFIG.PHASE2
+    CONFIG.QUEST_ID = phaseCfg.QUEST_ID
+    CONFIG.NPC_ID = phaseCfg.NPC_ID
+    CONFIG.NPC_NAME = phaseCfg.NPC_NAME
+    CONFIG.NPC_POS = phaseCfg.NPC_POS
+    CONFIG.PARK_POS = phaseCfg.PARK_POS
+    CONFIG.CRUISE_SPEED_MPS = phaseCfg.CRUISE_SPEED_MPS
+end
+
+local STATS = {
+    totalRain = 0,
+    startTime = nil,
+    isRunning = false,
+    totalCycles = 0,
+    totalCycleTime = 0,
+    avgCycleTime = 0
+}
+
+_G.AutoQuestRunning = false
+local isRunning = false
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+
+local function getPlayerLevel()
+    local prof = (getrenv and getrenv().shared.RaycityShop and getrenv().shared.RaycityShop.profile and getrenv().shared.RaycityShop.profile.get and getrenv().shared.RaycityShop.profile.get())
+        or (shared.RaycityShop and shared.RaycityShop.profile and shared.RaycityShop.profile.get and shared.RaycityShop.profile.get())
+    if prof and prof.level then return tonumber(prof.level) or 1 end
+    local attr = LocalPlayer and LocalPlayer:GetAttribute("RaycityPlayerLv")
+    if type(attr) == "number" then return attr end
+    return 1
+end
+
+local function humanWait(baseTime, variance)
+    variance = variance or 0.05
+    task.wait(baseTime + (math.random() * variance * 2) - variance)
+end
+
+local RBRCQuest = ReplicatedStorage:WaitForChild("RBRCQuest", 10)
+if not RBRCQuest then warn("[Tey Private] Error: ไม่พบ RBRCQuest"); return end
+local Remotes = RBRCQuest:WaitForChild("Remotes", 10)
+if not Remotes then warn("[Tey Private] Error: ไม่พบ Remotes"); return end
+local QuestRequest = Remotes:WaitForChild("QuestRequest", 10)
+local QuestEventUp = Remotes:FindFirstChild("QuestEventUp")
+local RoadFightRequest = Remotes:FindFirstChild("RoadFightRequest")
+
+local RCDrive = ReplicatedStorage:WaitForChild("RCDrive", 10)
+if not RCDrive then warn("[Tey Private] Error: ไม่พบ RCDrive"); return end
+local EconomyRulesModule = RCDrive:WaitForChild("EconomyRules", 10)
+if not EconomyRulesModule then warn("[Tey Private] Error: ไม่พบ EconomyRules"); return end
+local EconomyRules = require(EconomyRulesModule)
+
+if CONFIG.ENABLE_ANTI_AFK then
+    pcall(function()
+        LocalPlayer.Idled:Connect(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    end)
+    task.spawn(function()
+        while true do
+            humanWait(45, 5)
+            if _G.AutoQuestRunning then
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new(100, 100))
+                end)
+            end
+        end
+    end)
+end
+
+local function getQuestState()
+    local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
+    if rq and type(rq.state) == "function" then
+        local ok, state = pcall(rq.state)
+        if ok and type(state) == "table" then return state end
+    end
+    return nil
+end
+
+local function isCarInsidePoly(polyRaw, carPos)
+    if type(polyRaw) ~= "table" or not carPos then return false end
+    local polyFlat = {}
+    for _, p in ipairs(polyRaw) do
+        local x, z
+        if typeof(p) == "Vector3" then x, z = p.X, p.Z
+        elseif type(p) == "table" then
+            x = tonumber(p.X or p.x or p[1])
+            z = tonumber(p.Z or p.z or p[3] or p[2])
+        elseif type(p) == "string" then
+            local sx, _, sz = string.match(p, "([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)")
+            x, z = tonumber(sx), tonumber(sz)
+        end
+        if x and z then table.insert(polyFlat, x); table.insert(polyFlat, z) end
+    end
+    if #polyFlat < 6 or #polyFlat % 2 ~= 0 then return false end
+    if MatchGeom and type(MatchGeom.inside) == "function" then
+        local ok, result = pcall(MatchGeom.inside, polyFlat, carPos.X, carPos.Z)
+        if ok and type(result) == "boolean" then return result end
+    end
+    local inside = false
+    local j = #polyFlat - 1
+    for i = 1, #polyFlat, 2 do
+        local xi, zi = polyFlat[i], polyFlat[i + 1]
+        local xj, zj = polyFlat[j], polyFlat[j + 1]
+        local crosses = ((zi > carPos.Z) ~= (zj > carPos.Z))
+            and (carPos.X < (xj - xi) * (carPos.Z - zi) / ((zj - zi) ~= 0 and (zj - zi) or 1e-9) + xi)
+        if crosses then inside = not inside end
+        j = i
+    end
+    return inside
+end
+
+local dummyHook = function() end
+local dummyHookFalse = function() return false end
+
+local function applyWorldNoclipBypass()
+    pcall(function()
+        workspace:SetAttribute("RaycityWallGuardOff", true)
+        workspace:SetAttribute("RCWallMapData", false)
+        workspace:SetAttribute("RCNativeWorldHit", false)
+        local myCar = workspace:FindFirstChild("MyCar")
+        local probe = myCar and myCar:FindFirstChild("WorldHitProbe")
+        if probe then pcall(function() probe:Destroy() end) end
+        local rwg = require(ReplicatedStorage:WaitForChild("RaycityWallGuard", 5))
+        if rwg then
+            rwg.dataHit = dummyHookFalse
+            rwg.wallAt = dummyHook
+            rwg.solid = dummyHookFalse
+            if rwg.parkAll then pcall(rwg.parkAll) end
+        end
+        local kcb = require(ReplicatedStorage:WaitForChild("KrCollisionBuilder", 5))
+        if kcb and kcb.dataHit then kcb.dataHit = dummyHookFalse end
+        local rlw = ReplicatedStorage:FindFirstChild("RaycityLivingWorld")
+        local obs = rlw and rlw:FindFirstChild("RaycityObstacles")
+        if obs then
+            local o = require(obs)
+            o.OBST_HIT_STUDS = 0
+            o.frame = dummyHook
+            o.spawn = dummyHook
+            o.spawnTrack = dummyHook
+        end
+    end)
+end
+applyWorldNoclipBypass()
+
+local function noclipProp(obj)
+    if obj:IsA("BasePart") and obj.Name ~= "RCDataFloor" and not obj:IsA("Terrain") then
+        pcall(function()
+            local contactClass = obj:GetAttribute("RaycityContactClass")
+            local surface = obj:GetAttribute("RaycitySurface")
+            if contactClass ~= 2 and surface ~= "road" then
+                if obj.CanCollide then obj.CanCollide = false end
+                if obj.CanTouch then obj.CanTouch = false end
+                obj.CanQuery = false
+            end
+        end)
+    end
+end
+
+local function noclipAllRoadsideProps()
+    pcall(function()
+        local krCity = workspace:FindFirstChild("KrCity")
+        if krCity then
+            for _, chunk in ipairs(krCity:GetChildren()) do
+                for _, obj in ipairs(chunk:GetDescendants()) do noclipProp(obj) end
+            end
+        end
+    end)
+    pcall(function()
+        local krCol = workspace:FindFirstChild("KrCollision")
+        if krCol then
+            for _, part in ipairs(krCol:GetDescendants()) do noclipProp(part) end
+        end
+    end)
+end
+noclipAllRoadsideProps()
+
+local cityDescendantConn = nil
+pcall(function()
+    local krCity = workspace:FindFirstChild("KrCity")
+    if krCity then
+        cityDescendantConn = krCity.DescendantAdded:Connect(function(obj) noclipProp(obj) end)
+    end
+end)
+
+local krColDescendantConn = nil
+pcall(function()
+    local krCol = workspace:FindFirstChild("KrCollision")
+    if krCol then
+        krColDescendantConn = krCol.DescendantAdded:Connect(function(obj) noclipProp(obj) end)
+    end
+end)
+
+local function applyTrafficNoCollideOnce()
+    pcall(function()
+        local rbrcTraffic = ReplicatedStorage:FindFirstChild("RBRCTraffic")
+        if rbrcTraffic then rbrcTraffic:SetAttribute("NativeCarHit", false) end
+    end)
+    pcall(function()
+        local renvShared = (getrenv and getrenv().shared) or shared
+        if renvShared and renvShared.RCDrivePairHooks then
+            renvShared.RCDrivePairHooks.traffic = dummyHook
+            renvShared.RCDrivePairHooks.mov = dummyHook
+        end
+        if shared.RCDrivePairHooks then
+            shared.RCDrivePairHooks.traffic = dummyHook
+            shared.RCDrivePairHooks.mov = dummyHook
+        end
+    end)
+end
+applyTrafficNoCollideOnce()
+
+local trafficSteppedConn = nil
+pcall(function()
+    trafficSteppedConn = RunService.Stepped:Connect(function()
+        pcall(function()
+            local myCar = workspace:FindFirstChild("MyCar")
+            if myCar then
+                for _, part in ipairs(myCar:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        if part.CanCollide then part.CanCollide = false end
+                        if part.CanTouch then part.CanTouch = false end
+                    end
+                end
+                local probe = myCar:FindFirstChild("WorldHitProbe")
+                if probe then pcall(function() probe:Destroy() end) end
+            end
+            local tc = workspace:FindFirstChild("RBRCTrafficCars")
+            if tc then
+                for _, car in ipairs(tc:GetChildren()) do
+                    if car:IsA("BasePart") then
+                        if car.CanCollide then car.CanCollide = false end
+                    elseif car:IsA("Model") then
+                        local r = car:FindFirstChild("Root") or car.PrimaryPart
+                        if r and r.CanCollide then r.CanCollide = false end
+                    end
+                end
+            end
+            local rc = workspace:FindFirstChild("RaycityRemoteCars")
+            if rc then
+                for _, car in ipairs(rc:GetChildren()) do
+                    if car:IsA("BasePart") then
+                        if car.CanCollide then car.CanCollide = false end
+                    elseif car:IsA("Model") then
+                        local r = car:FindFirstChild("Root") or car.PrimaryPart
+                        if r and r.CanCollide then r.CanCollide = false end
+                    end
+                end
+            end
+        end)
+    end)
+end)
+
+local lastNoclipSweep = 0
+local function maintainHooks()
+    local renvShared = (getrenv and getrenv().shared) or shared
+    if renvShared and renvShared.RCDrivePairHooks then
+        renvShared.RCDrivePairHooks.traffic = dummyHook
+        renvShared.RCDrivePairHooks.mov = dummyHook
+    end
+    if shared.RCDrivePairHooks then
+        shared.RCDrivePairHooks.traffic = dummyHook
+        shared.RCDrivePairHooks.mov = dummyHook
+    end
+    if renvShared and renvShared.RBRCQuest then renvShared.RBRCQuest.reportCollision = dummyHook end
+    if shared.RBRCQuest then shared.RBRCQuest.reportCollision = dummyHook end
+    workspace:SetAttribute("RaycityWallGuardOff", true)
+    workspace:SetAttribute("RCWallMapData", false)
+    workspace:SetAttribute("RCNativeWorldHit", false)
+    local rwg = shared.RaycityWallGuard
+    if rwg then
+        if rwg.dataHit ~= dummyHookFalse then rwg.dataHit = dummyHookFalse end
+        if rwg.wallAt ~= dummyHook then rwg.wallAt = dummyHook end
+        if rwg.solid ~= dummyHookFalse then rwg.solid = dummyHookFalse end
+    end
+    if os.clock() - lastNoclipSweep > 1.0 then
+        lastNoclipSweep = os.clock()
+        pcall(function()
+            local tf = workspace:FindFirstChild("RBRCTrafficCars")
+            if tf then
+                for _, part in ipairs(tf:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+                end
+            end
+        end)
+    end
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        local phys = rcd.phys
+        if phys.throttle > 0 and phys.gear == 0 then phys.gear = 1
+        elseif phys.throttle < 0 and phys.gear == 0 then phys.gear = -1 end
+        if phys.p then
+            phys.p.redRpm = math.max(phys.p.redRpm or 6000, 9200)
+            phys.p.maxRpm = math.max(phys.p.maxRpm or 7830, 10800)
+            phys.p.vmax = math.max(phys.p.vmax or 100, 115)
+            phys.p.btPower = math.max(phys.p.btPower or 2.5, 3.8)
+            phys.p.btOver = math.max(phys.p.btOver or 1.12, 1.35)
+        end
+        phys.torqueBonus = math.max(phys.torqueBonus or 0, 550)
+        phys.gripScale = math.max(phys.gripScale or 1, 2.8)
+    end
+end
+
+local function getCarRoot()
+    local car = workspace:FindFirstChild("MyCar")
+    if not car then return nil end
+    if car:IsA("BasePart") then return car end
+    if car:IsA("Model") then
+        local root = car.PrimaryPart or car:FindFirstChild("Root") or car:FindFirstChild("Hull")
+        if root and root:IsA("BasePart") then return root end
+    end
+    return nil
+end
+
+local function getCarState()
+    local root = getCarRoot()
+    if root then return root.Position, root.CFrame.LookVector end
+    return nil, nil
+end
+
+local npcPositionHoldConn = nil
+local npcPositionHoldCFrame = nil
+
+local function stopNpcPositionHold()
+    if npcPositionHoldConn then
+        pcall(function() npcPositionHoldConn:Disconnect() end)
+        npcPositionHoldConn = nil
+    end
+    npcPositionHoldCFrame = nil
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = 0
+        rcd.phys.brake = 0
+        rcd.phys.steerIn = 0
+    end
+end
+
+local function startNpcPositionHold()
+    if npcPositionHoldConn then return true end
+    local root = getCarRoot()
+    if not root then return false end
+    npcPositionHoldCFrame = root.CFrame
+    local lastQuestStateCheck = 0
+    local questStarted = false
+    npcPositionHoldConn = RunService.Heartbeat:Connect(function()
+        if os.clock() - lastQuestStateCheck >= 0.2 then
+            lastQuestStateCheck = os.clock()
+            local st = getQuestState()
+            questStarted = st ~= nil and (st.state == "running" or st.state == "boarding") and st.questId == CONFIG.QUEST_ID
+        end
+        if not _G.AutoQuestRunning or questStarted then
+            stopNpcPositionHold()
+            return
+        end
+        local currentRoot = getCarRoot()
+        if currentRoot and npcPositionHoldCFrame then
+            pcall(function()
+                currentRoot.CFrame = npcPositionHoldCFrame
+                currentRoot.AssemblyLinearVelocity = Vector3.zero
+                currentRoot.AssemblyAngularVelocity = Vector3.zero
+            end)
+        end
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        if rcd and rcd.phys then
+            rcd.phys.throttle = 0
+            rcd.phys.brake = 1
+            rcd.phys.steerIn = 0
+            rcd.phys.v = Vector3.zero
+            rcd.phys.w = Vector3.zero
+        end
+    end)
+    return true
+end
+
+local function getLiveNpcPos()
+    local ok, pos = pcall(function()
+        local npcs = workspace:FindFirstChild("RBRCNpcs")
+        if not npcs then return nil end
+        local npc = npcs:FindFirstChild(CONFIG.NPC_NAME)
+            or npcs:FindFirstChild(CONFIG.NPC_ID)
+            or npcs:FindFirstChild("Min R")
+            or npcs:FindFirstChild("MinR")
+        if not npc then
+            for _, n in ipairs(npcs:GetChildren()) do
+                if n:GetAttribute("NpcId") == 940105 or n:GetAttribute("RBRCNpcId") == "mission24:105" then
+                    npc = n
+                    break
+                end
+            end
+        end
+        if not npc then return nil end
+        local root = npc:FindFirstChild("Root") or npc.PrimaryPart or npc:FindFirstChildWhichIsA("BasePart")
+        if root and root:IsA("BasePart") then return root.Position end
+        return nil
+    end)
+    if ok and typeof(pos) == "Vector3" then return pos end
+    return nil
+end
+
+local function getNpcPos() return getLiveNpcPos() or CONFIG.NPC_POS end
+
+local function parseVector3(val)
+    if typeof(val) == "Vector3" then return val end
+    if type(val) ~= "string" then return nil end
+    local x, y, z = string.match(val, "([%-%d%.]+)%s*,%s*([%-%d%.]+)%s*,%s*([%-%d%.]+)")
+    if x and y and z then return Vector3.new(tonumber(x), tonumber(y), tonumber(z)) end
+    return nil
+end
+
+local function getActiveObjective(st)
+    if not st or (st.state ~= "running" and st.state ~= "boarding") then return nil end
+    local q = st.q
+    local currentObj = nil
+    if q and q.objectives then
+        for _, obj in ipairs(q.objectives) do
+            if obj.dest and obj.dest.target and not obj.passive then
+                local objState = st.objectives and st.objectives[obj.idx]
+                local isDone = objState and (objState.done == true)
+                if not isDone and (obj.step == st.step or st.step == 0) then
+                    currentObj = obj
+                    break
+                end
+            end
+        end
+    end
+    if currentObj then
+        local targetPos = parseVector3(currentObj.dest.target)
+        if targetPos then
+            local isStop = (currentObj.dest.stop == true) or (currentObj.dest.pillar == "stop")
+            return {
+                idx = currentObj.idx, step = currentObj.step or st.step,
+                target = targetPos, isStop = isStop,
+                pillar = currentObj.dest.pillar, poly = currentObj.dest.poly
+            }
+        end
+    end
+    local nav = (getrenv and getrenv().shared.RaycityNavigation) or shared.RaycityNavigation
+    if nav and nav.getGuide then
+        local guide = nav.getGuide()
+        if guide and (guide.target or guide.goal) then
+            local gTarget = guide.target or guide.goal
+            local parsedPos = parseVector3(gTarget)
+            if parsedPos then
+                return {
+                    idx = guide.idx or st.step, step = st.step,
+                    target = parsedPos, isStop = (guide.stop == true) or (guide.pillar == "stop"),
+                    pillar = guide.pillar, poly = nil
+                }
+            end
+        end
+    end
+    return nil
+end
+
+local function performUnstuck(targetPos)
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        local myCF = getCarRoot() and getCarRoot().CFrame
+        local steer = 0.55
+        if myCF and targetPos then
+            local rel = myCF:PointToObjectSpace(targetPos)
+            steer = (rel.X >= 0) and -0.55 or 0.55
+        end
+        rcd.phys.brake = 0
+        rcd.phys.throttle = -0.65
+        rcd.phys.steerIn = steer
+        task.wait(0.7)
+        rcd.phys.throttle = 0
+        rcd.phys.steerIn = 0
+        rcd.phys.brake = 1
+        task.wait(0.12)
+        rcd.phys.brake = 0
+    end
+end
+
+local function driveToNpcSmooth(timeout)
+    if not _G.AutoQuestRunning then return false end
+    timeout = timeout or 90
+    stopNpcPositionHold()
+    local npcPos = getNpcPos()
+    local carPos = getCarState()
+    if not carPos then return false end
+    local distToNpc = (carPos - npcPos).Magnitude
+    if distToNpc <= 7.0 then
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        if rcd and rcd.phys then
+            rcd.phys.throttle = 0
+            rcd.phys.brake = 1
+            rcd.phys.steerIn = 0
+            rcd.phys.v = Vector3.new(0, 0, 0)
+        end
+        return true
+    end
+    local startTime = os.clock()
+    local lastPos = carPos
+    local lastMoveT = os.clock()
+    while _G.AutoQuestRunning do
+        task.wait(0.04)
+        maintainHooks()
+        local currentPos = getCarState()
+        if not currentPos then break end
+        npcPos = getNpcPos()
+        local curDistToNpc = (currentPos - npcPos).Magnitude
+        local carRoot = getCarRoot()
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        if carRoot and rcd and rcd.phys then
+            local relDir = carRoot.CFrame:PointToObjectSpace(npcPos)
+            local steer = math.clamp(relDir.X * 2, -1, 1)
+            local targetSpeed = 20
+            if curDistToNpc < 30 then targetSpeed = 5 end
+            if curDistToNpc < 10 then targetSpeed = 2 end
+            local currentSpeed = rcd.phys.v.Magnitude
+            local throttle = 1
+            local brake = 0
+            if currentSpeed > targetSpeed + 1 then throttle = 0; brake = 0.5
+            elseif currentSpeed > targetSpeed then throttle = 0; brake = 0.1 end
+            rcd.phys.steerIn = steer
+            rcd.phys.throttle = throttle
+            rcd.phys.brake = brake
+        end
+        if curDistToNpc <= 6.5 then
+            if rcd and rcd.phys then
+                rcd.phys.throttle = 0
+                rcd.phys.brake = 1
+                rcd.phys.steerIn = 0
+                rcd.phys.v = Vector3.new(0, 0, 0)
+                rcd.phys.w = Vector3.new(0, 0, 0)
+            end
+            return true
+        end
+        if (currentPos - lastPos).Magnitude > 2 then
+            lastPos = currentPos
+            lastMoveT = os.clock()
+        else
+            local stillT = os.clock() - lastMoveT
+            if curDistToNpc > 8 and stillT > CONFIG.STUCK_TIME_SEC then
+                performUnstuck(npcPos)
+                lastPos = getCarState() or currentPos
+                lastMoveT = os.clock()
+            end
+        end
+        if os.clock() - startTime > timeout then
+            break
+        end
+    end
+    return false
+end
+
+local function getFuelInfo()
+    local fuel, cap = nil, nil
+    pcall(function()
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        if rcd and rcd.phys and rcd.phys.p then
+            fuel = tonumber(rcd.phys.p.fuel)
+            cap = tonumber(rcd.phys.p.fuelCap)
+        end
+        if not fuel or not cap then
+            local car = workspace:FindFirstChild("MyCar")
+            if car then
+                local fAttr = car:GetAttribute("Fuel")
+                local cAttr = car:GetAttribute("FuelCap")
+                if fAttr then fuel = tonumber(fAttr) end
+                if cAttr then cap = tonumber(cAttr) end
+            end
+        end
+    end)
+    return fuel, cap
+end
+
+local function isRefuelNeeded(beforeQuest)
+    if not CONFIG.ENABLE_AUTO_REFUEL then return false end
+    local fuel, cap = getFuelInfo()
+    if not fuel or not cap or cap <= 0 then return false end
+    if beforeQuest then
+        local minL = CONFIG.REFUEL_BEFORE_QUEST_MIN_L or 15.0
+        local minPct = CONFIG.REFUEL_BEFORE_QUEST_PCT or 0.08
+        return (fuel < minL) or ((fuel / cap) < minPct)
+    else
+        return fuel <= 0.5
+    end
+end
+
+local function getNearestFuelStation(fromPos)
+    if not fromPos then fromPos = getCarState() or CONFIG.NPC_POS end
+    local bestStation, bestDist = nil, math.huge
+    for _, st in ipairs(CONFIG.FUEL_STATIONS) do
+        local stPos = st.pos
+        if stPos then
+            local d = (fromPos - stPos).Magnitude
+            if d < bestDist then
+                bestDist = d
+                bestStation = { npcId = st.npcId, name = st.name, pos = stPos, dist = d }
+            end
+        end
+    end
+    return bestStation
+end
+
+local function requestServerRefuel(stationId)
+    local refuelSuccess = false
+    local TownServicesRemote = nil
+    pcall(function()
+        local townFolder = ReplicatedStorage:FindFirstChild("RaycityTown")
+        local remotes = townFolder and townFolder:FindFirstChild("Remotes")
+        TownServicesRemote = remotes and remotes:FindFirstChild("TownServicesRequest")
+    end)
+    if TownServicesRemote then
+        local ok, res = pcall(function()
+            return TownServicesRemote:InvokeServer({ op = "fieldService", kind = "fuel", npcId = stationId or 800043, all = true })
+        end)
+        if ok and (res == true or (type(res) == "table" and res.ok)) then refuelSuccess = true end
+    end
+    if not refuelSuccess then
+        local ts = (getrenv and getrenv().shared.RaycityTownServices) or shared.RaycityTownServices
+        if ts and ts.request then
+            local ok, res = pcall(ts.request, "fieldService", { kind = "fuel", npcId = stationId or 800043, all = true })
+            if ok and (res == true or (type(res) == "table" and res.ok)) then refuelSuccess = true end
+        end
+    end
+    return refuelSuccess
+end
+
+local function driveToFuelAndRefuel(timeout)
+    if not _G.AutoQuestRunning then return false end
+    timeout = timeout or 120
+    local carPos = getCarState()
+    local station = getNearestFuelStation(carPos)
+    if not station then return false end
+    local startTime = os.clock()
+    local lastPos = carPos
+    local lastMoveT = os.clock()
+    while _G.AutoQuestRunning do
+        task.wait(0.04)
+        maintainHooks()
+        local curPos = getCarState()
+        if not curPos then break end
+        local distToStation = (curPos - station.pos).Magnitude
+        local carRoot = getCarRoot()
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        if carRoot and rcd and rcd.phys then
+            local relDir = carRoot.CFrame:PointToObjectSpace(station.pos)
+            local steer = math.clamp(relDir.X * 2, -1, 1)
+            local targetSpeed = 20
+            if distToStation < 30 then targetSpeed = 5 end
+            if distToStation < 10 then targetSpeed = 2 end
+            local currentSpeed = rcd.phys.v.Magnitude
+            local throttle = 1
+            local brake = 0
+            if currentSpeed > targetSpeed + 1 then throttle = 0; brake = 0.5
+            elseif currentSpeed > targetSpeed then throttle = 0; brake = 0.1 end
+            rcd.phys.steerIn = steer
+            rcd.phys.throttle = throttle
+            rcd.phys.brake = brake
+        end
+        if distToStation <= 7.0 then
+            if rcd and rcd.phys then
+                rcd.phys.throttle = 0
+                rcd.phys.brake = 1
+                rcd.phys.steerIn = 0
+                rcd.phys.v = Vector3.new(0, 0, 0)
+                rcd.phys.w = Vector3.new(0, 0, 0)
+            end
+            humanWait(0.3, 0.1)
+            for attempt = 1, 4 do
+                if requestServerRefuel(station.npcId) then break end
+                humanWait(0.4, 0.2)
+            end
+            humanWait(0.5, 0.1)
+            return true
+        end
+        if (curPos - lastPos).Magnitude > 2 then
+            lastPos = curPos
+            lastMoveT = os.clock()
+        else
+            local stillT = os.clock() - lastMoveT
+            if distToStation > 8 and stillT > CONFIG.STUCK_TIME_SEC then
+                performUnstuck(station.pos)
+                lastPos = getCarState() or curPos
+                lastMoveT = os.clock()
+            end
+        end
+        if os.clock() - startTime > timeout then
+            break
+        end
+    end
+    return false
+end
+
+local function ensureFuelReady(beforeQuest)
+    if not CONFIG.ENABLE_AUTO_REFUEL then return true end
+    if not isRefuelNeeded(beforeQuest) then return true end
+    return driveToFuelAndRefuel(120)
+end
+
+local MXRemoteFolder = ReplicatedStorage:WaitForChild("RaycityMissionExtra", 5)
+local MXRemotes = MXRemoteFolder and MXRemoteFolder:FindFirstChild("Remotes")
+local MXRequest = MXRemotes and MXRemotes:FindFirstChild("MXRequest")
+local MXPush = MXRemotes and MXRemotes:FindFirstChild("MXPush")
+
+local cachedDropGetAllFn = nil
+local cachedDropTbl = nil
+local cachedShopItems = nil
+task.spawn(function()
+    local shopFolder = ReplicatedStorage:FindFirstChild("RaycityShop")
+    if shopFolder and shopFolder:FindFirstChild("ShopItems") then
+        cachedShopItems = require(shopFolder.ShopItems)
+    end
+end)
+
+local function resolveMissionExtraDropHandles()
+    if cachedDropGetAllFn and cachedDropTbl then return cachedDropGetAllFn, cachedDropTbl end
+    pcall(function()
+        if type(getgc) ~= "function" then return end
+        for _, fn in ipairs(getgc(false)) do
+            if type(fn) == "function" and (not isexecutorclosure or not isexecutorclosure(fn)) then
+                local src, name = debug.info(fn, "sn")
+                if src and string.find(src, "RaycityMissionExtraClient") and name == "dropGetAll" then
+                    cachedDropGetAllFn = fn
+                    local ok, tbl = pcall(debug.getupvalue, fn, 1)
+                    if ok and type(tbl) == "table" then cachedDropTbl = tbl end
+                    break
+                end
+            end
+        end
+    end)
+    return cachedDropGetAllFn, cachedDropTbl
+end
+resolveMissionExtraDropHandles()
+
+local isSellingInventory = false
+local function sellAllInventoryItems()
+    if not CONFIG.ENABLE_AUTO_SELL or isSellingInventory then return 0, 0 end
+    isSellingInventory = true
+    local soldCount, totalRainEarned = 0, 0
+    pcall(function()
+        local rs = (getrenv and getrenv().shared.RaycityShop) or shared.RaycityShop
+        if not rs or type(rs.request) ~= "function" then return end
+        local prof = rs.profile and rs.profile.get and rs.profile.get()
+        local inv = prof and prof.inventory
+        if type(inv) ~= "table" then return end
+        local invSize = tonumber(prof.invSize) or 30
+        for slotIdx = 1, invSize do
+            local item = inv[tostring(slotIdx)] or inv[slotIdx]
+            if type(item) == "table" and item.uid then
+                local canSell = CONFIG.SELL_BOUND_ITEMS or not item.bound
+                if canSell then
+                    local countToSell = math.max(1, tonumber(item.count) or 1)
+                    local res = rs.request("sell", { cell = slotIdx, count = countToSell, uid = item.uid })
+                    if res and res.ok then
+                        soldCount = soldCount + countToSell
+                        totalRainEarned = totalRainEarned + (tonumber(res.total) or 0)
+                        STATS.totalRain = STATS.totalRain + (tonumber(res.total) or 0)
+                    end
+                end
+            end
+        end
+    end)
+    isSellingInventory = false
+    return soldCount, totalRainEarned
+end
+
+local isClaimingDrops = false
+local function claimAllDropsAndSellInventory()
+    if (not CONFIG.ENABLE_AUTO_LOOT and not CONFIG.ENABLE_AUTO_SELL) or isClaimingDrops then return false end
+    isClaimingDrops = true
+    local claimedAny = false
+    pcall(function()
+        if CONFIG.ENABLE_AUTO_LOOT then
+            local dropGetAllFn, dropTbl = resolveMissionExtraDropHandles()
+            if type(dropTbl) == "table" then
+                local pendingEntries = {}
+                for dropId, entry in pairs(dropTbl) do
+                    if type(entry) == "table" and (entry.mode == "pick" or entry.mode == nil) then
+                        table.insert(pendingEntries, { id = dropId, entry = entry })
+                    end
+                end
+                if #pendingEntries > 0 then
+                    if CONFIG.ENABLE_AUTO_SELL then sellAllInventoryItems() end
+                    for _, item in ipairs(pendingEntries) do
+                        local dropId, entry = item.id, item.entry
+                        if type(dropGetAllFn) == "function" and not entry.busy then
+                            pcall(dropGetAllFn, entry)
+                            claimedAny = true
+                        end
+                        if dropTbl[dropId] ~= nil and MXRequest then
+                            local ok, res = pcall(function() return MXRequest:InvokeServer("pick", { id = dropId }) end)
+                            if ok and type(res) == "table" and res.ok then
+                                claimedAny = true
+                                dropTbl[dropId] = nil
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if CONFIG.ENABLE_AUTO_SELL then sellAllInventoryItems() end
+    end)
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = 0
+        rcd.phys.brake = 1
+        rcd.phys.steerIn = 0
+        rcd.phys.v = Vector3.zero
+        rcd.phys.w = Vector3.zero
+    end
+    isClaimingDrops = false
+    return claimedAny
+end
+
+local mxPushConn = nil
+if MXPush then
+    pcall(function()
+        mxPushConn = MXPush.OnClientEvent:Connect(function(pkt)
+            if not _G.AutoQuestRunning or (not CONFIG.ENABLE_AUTO_LOOT and not CONFIG.ENABLE_AUTO_SELL) then return end
+            if type(pkt) == "table" and (pkt.op == "drop" or pkt.op == "diceResult") then
+                task.spawn(function()
+                    humanWait(0.15, 0.05)
+                    claimAllDropsAndSellInventory()
+                    humanWait(0.5, 0.1)
+                    claimAllDropsAndSellInventory()
+                end)
+            end
+        end)
+    end)
+end
+
+local function ensureQuestAccepted()
+    claimAllDropsAndSellInventory()
+    if isRefuelNeeded(true) then
+        stopNpcPositionHold()
+        ensureFuelReady(true)
+    end
+    local st = getQuestState()
+    if st and (st.state == "running" or st.state == "boarding") and st.questId == CONFIG.QUEST_ID then
+        stopNpcPositionHold()
+        return true
+    end
+    for attempt = 1, CONFIG.MAX_ACCEPT_RETRIES do
+        if not _G.AutoQuestRunning then
+            stopNpcPositionHold()
+            return false
+        end
+        if isRefuelNeeded(true) then
+            stopNpcPositionHold()
+            ensureFuelReady(true)
+        end
+        st = getQuestState()
+        if st and (st.state == "running" or st.state == "boarding") and st.questId == CONFIG.QUEST_ID then
+            stopNpcPositionHold()
+            return true
+        end
+        local carPos = getCarState()
+        if not carPos then humanWait(0.2, 0.1); continue end
+        local npcPos = getLiveNpcPos() or CONFIG.NPC_POS
+        local distToNpc = (carPos - npcPos).Magnitude
+        if distToNpc > 7.0 then
+            stopNpcPositionHold()
+            local reachedNpc = driveToNpcSmooth(90)
+            if not reachedNpc then
+                stopNpcPositionHold()
+                humanWait(0.3, 0.2)
+                continue
+            end
+            humanWait(0.08, 0.05)
+            carPos = getCarState()
+            if not carPos then continue end
+            distToNpc = (carPos - npcPos).Magnitude
+        end
+        if distToNpc > 8.0 then
+            stopNpcPositionHold()
+            driveToNpcSmooth(15)
+            humanWait(0.12, 0.05)
+            carPos = getCarState()
+            if not carPos then continue end
+        end
+        startNpcPositionHold()
+        
+        if CONFIG.IS_ROADFIGHT then
+            if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
+            if QuestRequest then
+                pcall(function()
+                    QuestRequest:InvokeServer({op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos})
+                end)
+            end
+            humanWait(0.15, 0.05)
+            local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
+            if QuestUI and QuestUI.offerShown and QuestUI.offerShown() then
+                pcall(function() QuestUI._offerAnswer(true) end)
+            end
+            if RoadFightRequest then
+                pcall(function()
+                    RoadFightRequest:InvokeServer({op = "accept", npcId = CONFIG.NPC_ID, slot = CONFIG.SLOT or 1})
+                end)
+            end
+        else
+            if QuestRequest then
+                pcall(function()
+                    QuestRequest:InvokeServer({ op = "talk", npcId = CONFIG.NPC_ID, carPos = carPos })
+                end)
+                humanWait(CONFIG.ACCEPT_DELAY_TALK, 0.02)
+                pcall(function()
+                    QuestRequest:InvokeServer({ op = "accept", questId = CONFIG.QUEST_ID, npcId = CONFIG.NPC_ID, carPos = carPos })
+                end)
+                humanWait(CONFIG.ACCEPT_DELAY_ACCEPT, 0.02)
+                pcall(function()
+                    QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID, carPos = carPos })
+                end)
+            end
+            local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
+            if rq and rq.talk then pcall(rq.talk, CONFIG.NPC_ID) end
+        end
+        
+        local QuestUI = require(ReplicatedStorage.RBRCQuest.QuestUI)
+        
+        for waitStep = 1, CONFIG.ACCEPT_POLL_MAX do
+            humanWait(CONFIG.ACCEPT_POLL_INTERVAL, 0.01)
+            
+            if QuestUI then
+                if QuestUI.offerShown and QuestUI.offerShown() then
+                    pcall(function() QuestUI._offerAnswer(true) end)
+                end
+                if QuestUI.dialogShown and QuestUI.dialogShown() then
+                    if QuestUI._dialogAnswer then pcall(function() QuestUI._dialogAnswer(true) end) end
+                end
+            end
+
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(Vector2.new(500, 500))
+            end)
+
+            st = getQuestState()
+            if st and st.questId == CONFIG.QUEST_ID then
+                if st.state == "running" then
+                    stopNpcPositionHold()
+                    return true
+                elseif st.state == "boarding" then
+                    stopNpcPositionHold()
+                    if QuestRequest then
+                        pcall(function()
+                            QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID })
+                        end)
+                    end
+                end
+            end
+        end
+        humanWait(0.2, 0.1)
+    end
+    stopNpcPositionHold()
+    return false
+end
+
+local function runOneQuestCycle()
+    local currentLv = getPlayerLevel()
+    local accepted = ensureQuestAccepted()
+    if not accepted then
+        humanWait(2.0, 0.5)
+        return
+    end
+    
+    local cycleStartTime = os.clock()
+    local currentActiveIdx, currentActiveTarget, currentActiveIsStop, currentActivePoly = nil, nil, false, nil
+    local stepStartTime = os.clock()
+    local lastStuckT = os.clock()
+    local lastStuckPos = getCarState()
+    local bestDistanceToTarget = math.huge
+    local lastProgressAt = os.clock()
+    local lastUnstuckAt = 0
+    local questStateUnknownSince = nil
+    local questStateRecoveryRequested = false
+    local lastThrillReportAt = 0
+    local lastLootCheckAt = 0
+    local stopEnteredAt = nil
+    local questFinishedConfirmedAt = nil
+    local lastWobbleUpdate = 0
+    local currentWobble = 0
+
+    while _G.AutoQuestRunning do
+        task.wait(0.05)
+        maintainHooks()
+        
+        if os.clock() - lastWobbleUpdate > 0.5 then
+            lastWobbleUpdate = os.clock()
+            if math.random() > 0.7 then
+                currentWobble = (math.random() * 0.2) - 0.1
+            else
+                currentWobble = 0
+            end
+        end
+
+        if CONFIG.ENABLE_AUTO_THRILL and (os.clock() - lastThrillReportAt) >= 1.5 then
+            lastThrillReportAt = os.clock()
+            pcall(function()
+                local rq = (getrenv and getrenv().shared.RBRCQuest) or shared.RBRCQuest
+                if rq and rq.reportThrill then rq.reportThrill(2) end
+                if QuestEventUp then
+                    QuestEventUp:FireServer({ op = "thrill", count = 2 })
+                end
+            end)
+        end
+        if os.clock() - lastLootCheckAt >= 1.5 then
+            lastLootCheckAt = os.clock()
+            claimAllDropsAndSellInventory()
+        end
+        if isRefuelNeeded(false) then
+            local refuelOk = ensureFuelReady(false)
+            if refuelOk and currentActiveTarget then
+                stepStartTime = os.clock()
+                lastStuckT = os.clock()
+                lastProgressAt = os.clock()
+            end
+        end
+        local st = getQuestState()
+        if not st then
+            local finishConfirmed = false
+            if currentActiveIsStop then
+                local finishCarPos = getCarState()
+                if isHoldingStopBox then finishConfirmed = true
+                elseif currentActivePoly then finishConfirmed = isCarInsidePoly(currentActivePoly, finishCarPos)
+                elseif finishCarPos and currentActiveTarget then finishConfirmed = (finishCarPos - currentActiveTarget).Magnitude <= 14 end
+            end
+            if not questFinishedConfirmedAt then
+                questFinishedConfirmedAt = os.clock()
+            end
+            local confirmElapsed = os.clock() - questFinishedConfirmedAt
+            if finishConfirmed and confirmElapsed >= 0.3 then
+                humanWait(CONFIG.STOP_HOLD_TIME, 0.05)
+                
+                local cycleDuration = os.clock() - cycleStartTime
+                STATS.totalCycles = STATS.totalCycles + 1
+                STATS.totalCycleTime = STATS.totalCycleTime + cycleDuration
+                STATS.avgCycleTime = STATS.totalCycleTime / STATS.totalCycles
+                print(string.format("[Tey Private] รอบที่ %d ใช้เวลา %.2f วินาที (เฉลี่ย %.2f วิ/รอบ)", STATS.totalCycles, cycleDuration, STATS.avgCycleTime))
+                
+                break
+            elseif not finishConfirmed and confirmElapsed >= CONFIG.QUEST_FINISH_CONFIRM_TIME then
+                questStateRecoveryRequested = true
+                break
+            end
+            humanWait(0.15, 0.05)
+            continue
+        end
+        questStateUnknownSince = nil
+        questFinishedConfirmedAt = nil
+
+        if st.state ~= "running" and st.state ~= "boarding" then
+            humanWait(CONFIG.STOP_HOLD_TIME, 0.05)
+            break
+        end
+        if st.state == "boarding" and QuestRequest then
+            pcall(function() QuestRequest:InvokeServer({ op = "boarded", questId = CONFIG.QUEST_ID }) end)
+        end
+        local activeObj = getActiveObjective(st)
+        if not activeObj then humanWait(0.08, 0.03); continue end
+        local targetChanged = currentActiveTarget == nil
+            or (activeObj.target - currentActiveTarget).Magnitude > 2
+            or activeObj.isStop ~= currentActiveIsStop
+        if activeObj.idx ~= currentActiveIdx or targetChanged then
+            currentActiveIdx = activeObj.idx
+            currentActiveTarget = activeObj.target
+            currentActiveIsStop = activeObj.isStop
+            currentActivePoly = activeObj.poly
+            stepStartTime = os.clock()
+            lastStuckT = os.clock()
+            lastStuckPos = getCarState()
+            bestDistanceToTarget = lastStuckPos and (lastStuckPos - activeObj.target).Magnitude or math.huge
+            lastProgressAt = os.clock()
+            lastUnstuckAt = 0
+            isHoldingStopBox = false
+            stopEnteredAt = nil
+            print(string.format("[Tey Private] ขับสู่ %s (Idx %d)", activeObj.isStop and "จุดจอดเส้นชัย" or "จุดผ่าน", activeObj.idx))
+        end
+        local carPosNow = getCarState()
+        local distToTarget = carPosNow and (carPosNow - activeObj.target).Magnitude or 999
+        local inBox = activeObj.isStop and isCarInsidePoly(activeObj.poly, carPosNow)
+        local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+        local speedKmh = rcd and rcd.phys and rcd.phys.v and (rcd.phys.v.Magnitude * 3.6) or 0
+        local carRoot = getCarRoot()
+
+        if activeObj.isStop and not isHoldingStopBox then
+            local arrivedAtStop = (inBox and distToTarget <= 6.0 and speedKmh < 3.0) or (distToTarget <= 3.8)
+            if arrivedAtStop then
+                isHoldingStopBox = true
+                stopEnteredAt = os.clock()
+                if rcd and rcd.phys then
+                    rcd.phys.throttle = 0
+                    rcd.phys.brake = 1
+                    rcd.phys.steerIn = 0
+                    rcd.phys.v = Vector3.zero
+                    rcd.phys.w = Vector3.zero
+                end
+            end
+        end
+
+        if isHoldingStopBox then
+            if rcd and rcd.phys then
+                rcd.phys.throttle = 0
+                rcd.phys.brake = 1
+                rcd.phys.steerIn = 0
+                rcd.phys.v = Vector3.zero
+                rcd.phys.w = Vector3.zero
+            end
+            lastStuckT = os.clock()
+            lastProgressAt = os.clock()
+            stepStartTime = os.clock()
+            if stopEnteredAt and (os.clock() - stopEnteredAt) > (CONFIG.STOP_HOLD_TIME + 1.0) then
+                local stCheck = getQuestState()
+                if not stCheck or (stCheck.state ~= "running" and stCheck.state ~= "boarding") then
+                    if rcd and rcd.phys then rcd.phys.brake = 0 end
+                    humanWait(0.2, 0.1)
+                    break
+                end
+            end
+            humanWait(0.04, 0.02)
+            continue
+        end
+
+        if carRoot and rcd and rcd.phys then
+            local targetPos = activeObj.target
+            local nav = (getrenv and getrenv().shared.RaycityNavigation) or shared.RaycityNavigation
+            if nav and nav.getGuide then
+                local guide = nav.getGuide()
+                if guide and guide.path and #guide.path > 0 then
+                    local closestIdx = 1
+                    local minDist = math.huge
+                    for i, p in ipairs(guide.path) do
+                        local d = (carPosNow - p).Magnitude
+                        if d < minDist then
+                            minDist = d
+                            closestIdx = i
+                        end
+                    end
+                    local nextIdx = math.min(closestIdx + 1, #guide.path)
+                    targetPos = guide.path[nextIdx]
+                end
+            end
+
+            local relDir = carRoot.CFrame:PointToObjectSpace(targetPos)
+            local steer = math.clamp(relDir.X * 2.5, -1, 1)
+            steer = steer + currentWobble
+
+            local targetSpeedMps = CONFIG.CRUISE_SPEED_MPS
+            if activeObj.isStop and distToTarget <= 200 then
+                local ratio = math.clamp(distToTarget / 200, 0, 1)
+                targetSpeedMps = math.max(CONFIG.CRUISE_SPEED_MPS * ratio, 5)
+            end
+
+            local currentSpeedMps = rcd.phys.v.Magnitude
+            local throttle = 1
+            local brake = 0
+            if currentSpeedMps > targetSpeedMps + 2 then
+                throttle = 0
+                brake = 0.5
+            elseif currentSpeedMps > targetSpeedMps then
+                throttle = 0
+                brake = 0.1
+            end
+
+            rcd.phys.steerIn = math.clamp(steer, -1, 1)
+            rcd.phys.throttle = throttle
+            rcd.phys.brake = brake
+        end
+
+        local now = os.clock()
+        if distToTarget < bestDistanceToTarget - 2.0 then
+            bestDistanceToTarget = distToTarget
+            lastProgressAt = now
+        end
+        if carPosNow then
+            if (carPosNow - (lastStuckPos or carPosNow)).Magnitude > 3.0 or speedKmh > 5 then
+                lastStuckPos = carPosNow
+                lastStuckT = os.clock()
+            elseif (not activeObj.isStop and distToTarget > 12) or (activeObj.isStop and distToTarget > 35) then
+                local stillTime = os.clock() - lastStuckT
+                local limit = activeObj.isStop and 4.0 or CONFIG.STUCK_TIME_SEC
+                if stillTime > limit and (now - lastUnstuckAt) >= 10.0 then
+                    lastUnstuckAt = now
+                    performUnstuck(activeObj.target)
+                    lastStuckPos = getCarState() or carPosNow
+                    lastStuckT = os.clock()
+                    lastProgressAt = os.clock()
+                    bestDistanceToTarget = distToTarget
+                end
+            end
+        end
+    end
+    local rcd = (getrenv and getrenv().shared.RCDrive) or shared.RCDrive
+    if rcd and rcd.phys then
+        rcd.phys.throttle = 0
+        rcd.phys.brake = 1
+        rcd.phys.steerIn = 0
+        rcd.phys.v = Vector3.zero
+        rcd.phys.w = Vector3.zero
+    end
+
+    humanWait(0.1, 0.05)
+    claimAllDropsAndSellInventory()
+    if isRefuelNeeded(true) then
+        ensureFuelReady(true)
+    end
+    
+    if rcd and rcd.phys then
+        rcd.phys.brake = 0
+    end
+
+    if questStateRecoveryRequested then
+        humanWait(0.5, 0.2)
+    else
+        humanWait(0.1, 0.05)
+    end
+    claimAllDropsAndSellInventory()
+end
+
+-- ============================================================
+-- 🎨 Tey Private GUI Setup
+-- ============================================================
 local Window = Library:CreateWindow({
-    Title = "NEVERLOSE",
-    User  = "Barlas",
+    Title = "TEY PRIVATE",
+    User  = LocalPlayer.Name,
     Till  = "Lifetime",
-    OnSave = function(flags) print("[Neverlose] saved", flags) end,
+    OnSave = function(flags) print("[Tey Private] saved", flags) end,
 })
 
-Window:AddCategory("Aimbot")
-local Ragebot  = Window:AddTab("Ragebot",  Icons.crosshairs)
-local AntiAim  = Window:AddTab("Anti-aim", Icons.ghost)
-local Legitbot = Window:AddTab("Legitbot", Icons.mouse)
+Window:AddCategory("Bot Controls")
 
-Window:AddCategory("Visuals")
-local PlayersTab = Window:AddTab("Players", Icons.user)
-local World      = Window:AddTab("World",   Icons.pallet)
+local MainTab = Window:AddTab("Main", Icons.hammer)
+local StatsTab = Window:AddTab("Stats", Icons.crown)
 
-Window:AddCategory("Miscellaneous")
-local MainTab = Window:AddTab("Main",    Icons.hammer)
-local Scripts = Window:AddTab("Scripts", Icons.code)
+local MainGroup = MainTab:AddSubtab("General")
+local g1 = MainGroup:AddGroup("Controls", Icons.play, "Left", 250)
+g1:AddButton({ Name = "▶ Start Bot", Callback = function()
+    if isGuiRunning then return end
+    isGuiRunning = true
+    _G.AutoQuestRunning = true
+    isRunning = true
+    STATS.isRunning = true
+    if not STATS.startTime or not _G.HasRunBefore then
+        STATS.startTime = os.time()
+        _G.HasRunBefore = true
+    end
+    print("[Tey Private] >>> STARTED <<<")
+    
+    mainThread = task.spawn(function()
+        local cycleCount = 0
+        while _G.AutoQuestRunning do
+            local currentLv = getPlayerLevel()
+            cycleCount = cycleCount + 1
+            print(string.format("\n>>> CYCLE (#%d) [Lv.%d] <<<", cycleCount, currentLv))
+            local ok, err = pcall(runOneQuestCycle)
+            if not ok then
+                warn("[Tey Private] Error:", err)
+                humanWait(1.5, 0.5)
+            end
+            task.wait(CONFIG.LOOP_DELAY)
+        end
+        isGuiRunning = false
+    end)
+end })
 
-local Modes  = { "Default", "Smooth", "Instant", "Adaptive", "Custom" }
-local Styles = { "Flat", "Gradient", "Outline", "Glow", "Shadow" }
+g1:AddButton({ Name = "■ Stop Bot", Callback = function()
+    if not isGuiRunning then return end
+    _G.AutoQuestRunning = false
+    isRunning = false
+    isGuiRunning = false
+    STATS.isRunning = false
+    if mainThread then task.cancel(mainThread) end
+    print("[Tey Private] >>> STOPPED <<<")
+end })
 
-local RGen = Ragebot:AddSubtab("General")
-local RAdv = Ragebot:AddSubtab("Advanced")
-local RPre = Ragebot:AddSubtab("Presets")
+local g2 = MainGroup:AddGroup("Phase Selector", Icons.crosshairs, "Right", 250)
+local phaseDropdown = g2:AddDropdown({
+    Name = "Phase",
+    Items = { "Phase 1: Derix", "Phase 2: Min R" },
+    Default = "Phase 2: Min R",
+    Flag = "phase_select",
+    Callback = function(Value)
+        if Value == "Phase 1: Derix" then
+            isPhase1 = true
+        else
+            isPhase1 = false
+        end
+        updatePhaseConfig()
+        print(string.format("[Tey Private] เปลี่ยนเป็น %s", Value))
+    end
+})
+g2:AddCheckbox({ Name = "Auto Sell", Default = true, Flag = "auto_sell", Callback = function(v)
+    CONFIG.ENABLE_AUTO_SELL = v
+    print(string.format("[Tey Private] AUTO-SELL: %s", v and "ON" or "OFF"))
+end })
 
-local g = RGen:AddGroup("Main", Icons.feather, "Left", 250)
-g:AddCheckbox({ Name = "Enabled", Icon = Icons.dagger, Default = true, Flag = "rg_enabled" })
-g:AddKeybind({ Name = "Activation key", Default = Enum.KeyCode.E, Flag = "rg_key" })
-g:AddDropdown({ Name = "Mode", Items = Modes, Flag = "rg_mode" })
-g:AddSlider({ Name = "Field of view", Min = 0, Max = 180, Default = 90, Suffix = "°", Flag = "rg_fov" })
-g:AddSlider({ Name = "Smoothness", Min = 0, Max = 100, Default = 35, Suffix = "%", Flag = "rg_smooth" })
-g:AddCheckbox({ Name = "Show indicator", Default = true, Flag = "rg_indicator" })
-g:AddColorPicker({ Name = "Indicator color", Default = Color3.fromRGB(0, 180, 255), Flag = "rg_indicator_col" })
+local StatsGroup = StatsTab:AddSubtab("General")
+local sg1 = StatsGroup:AddGroup("Statistics", Icons.crown, "Left", 300)
+local TimeLabel = sg1:AddLabel("⏱ TIME: 00:00:00")
+local RainTotalLabel = sg1:AddLabel("💰 RAIN: 0")
+local RainHourLabel = sg1:AddLabel("⚡ RAIN/H: 0")
+local CycleLabel = sg1:AddLabel("🏁 CYCLES: 0")
+local AvgTimeLabel = sg1:AddLabel("⏳ AVG/CYCLE: 0.0 MIN")
 
-local g2 = RGen:AddGroup("Options", Icons.crown, "Right", 250)
-g2:AddCheckbox({ Name = "Auto toggle", Flag = "rg_auto" })
-g2:AddCheckbox({ Name = "Hold to use", Default = true, Flag = "rg_hold" })
-g2:AddCheckbox({ Name = "Ignore team", Flag = "rg_team" })
-g2:AddSeparator()
-g2:AddDropdown({ Name = "Priority", Items = { "Closest", "Lowest", "Random", "Crosshair" }, Flag = "rg_priority" })
-g2:AddSlider({ Name = "Delay", Min = 0, Max = 500, Default = 50, Suffix = "ms", Flag = "rg_delay" })
-g2:AddSlider({ Name = "Max distance", Min = 10, Max = 1000, Default = 300, Suffix = "m", Flag = "rg_dist" })
+local function updateStats()
+    if not STATS.startTime then return end
+    local elapsed = os.time() - STATS.startTime
+    local h = math.floor(elapsed / 3600)
+    local m = math.floor((elapsed % 3600) / 60)
+    local s = elapsed % 60
+    TimeLabel:SetText(string.format("⏱ TIME: %02d:%02d:%02d", h, m, s))
+    RainTotalLabel:SetText(string.format("💰 RAIN: %s", tostring(STATS.totalRain):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
+    if elapsed > 0 then
+        local rainPerHour = math.floor((STATS.totalRain / elapsed) * 3600)
+        RainHourLabel:SetText(string.format("⚡ RAIN/H: %s", tostring(rainPerHour):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")))
+    end
+    CycleLabel:SetText(string.format("🏁 CYCLES: %d", STATS.totalCycles))
+    if STATS.avgCycleTime > 0 then
+        local avgMin = STATS.avgCycleTime / 60
+        AvgTimeLabel:SetText(string.format("⏳ AVG/CYCLE: %.2f MIN", avgMin))
+    end
+end
 
-local g3 = RGen:AddGroup("Extras", Icons.axe_battle, "Left", 180)
-g3:AddCheckbox({ Name = "Notifications", Default = true, Flag = "rg_notify" })
-g3:AddCheckbox({ Name = "Sound on toggle", Flag = "rg_sound" })
-g3:AddDropdown({ Name = "Sound", Items = { "Click", "Pop", "Beep", "Ding" }, Flag = "rg_sound_type" })
-g3:AddSlider({ Name = "Volume", Min = 0, Max = 100, Default = 60, Suffix = "%", Flag = "rg_volume" })
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if STATS.isRunning then
+            pcall(updateStats)
+        end
+    end
+end)
 
-local g4 = RGen:AddGroup("Profile", Icons.save, "Right", 180)
-g4:AddTextbox({ Name = "Profile name", Flag = "rg_profile" })
-g4:AddButton({ Name = "Save profile", Callback = function() print("profile saved") end })
-g4:AddButton({ Name = "Reset to default", Callback = function() print("profile reset") end })
+_G.RaycityAutoQuestStop = function()
+    _G.AutoQuestRunning = false
+    isRunning = false
+    isGuiRunning = false
+    STATS.isRunning = false
+    if mainThread then pcall(function() task.cancel(mainThread) end) end
+    if Window then pcall(function() Window:Destroy() end) end
+    print("[Tey Private] หยุดเรียบร้อย")
+end
 
-local a1 = RAdv:AddGroup("Timing", Icons.hammer, "Left")
-a1:AddSlider({ Name = "Update rate", Min = 1, Max = 240, Default = 60, Suffix = "hz", Flag = "adv_rate" })
-a1:AddSlider({ Name = "Randomization", Min = 0, Max = 100, Default = 10, Suffix = "%", Flag = "adv_random" })
-a1:AddCheckbox({ Name = "Predict movement", Flag = "adv_predict" })
-a1:AddCheckbox({ Name = "Limit per second", Flag = "adv_limit" })
-local a2 = RAdv:AddGroup("Behaviour", Icons.code, "Right")
-a2:AddDropdown({ Name = "Curve", Items = { "Linear", "Ease in", "Ease out", "Ease in-out" }, Flag = "adv_curve" })
-a2:AddCheckbox({ Name = "Only when visible", Default = true, Flag = "adv_visible" })
-a2:AddCheckbox({ Name = "Stop on release", Default = true, Flag = "adv_release" })
-
-local p1 = RPre:AddGroup("Presets", Icons.crown, "Left")
-p1:AddDropdown({ Name = "Preset", Items = { "Balanced", "Aggressive", "Safe", "Custom" }, Flag = "pre_preset" })
-p1:AddButton({ Name = "Load preset", Callback = function() print("preset loaded") end })
-
-local AAGen = AntiAim:AddSubtab("General")
-AntiAim:AddSubtab("Conditions")
-local b1 = AAGen:AddGroup("Base", Icons.baby, "Left", 220)
-b1:AddCheckbox({ Name = "Enabled", Flag = "aa_enabled" })
-b1:AddDropdown({ Name = "Pitch", Items = { "None", "Up", "Down", "Zero", "Random" }, Flag = "aa_pitch" })
-b1:AddDropdown({ Name = "Yaw base", Items = { "Local view", "At targets", "Static" }, Flag = "aa_yawbase" })
-b1:AddSlider({ Name = "Yaw offset", Min = -180, Max = 180, Default = 0, Suffix = "°", Flag = "aa_yaw" })
-b1:AddSlider({ Name = "Jitter", Min = 0, Max = 90, Default = 0, Suffix = "°", Flag = "aa_jitter" })
-local b2 = AAGen:AddGroup("Keys", Icons.ad, "Left", 176)
-b2:AddKeybind({ Name = "Manual left", Default = Enum.KeyCode.Z, Flag = "aa_left" })
-b2:AddKeybind({ Name = "Manual right", Default = Enum.KeyCode.C, Flag = "aa_right" })
-b2:AddKeybind({ Name = "Manual back", Default = Enum.KeyCode.X, Flag = "aa_back" })
-local b3 = AAGen:AddGroup("Advanced", nil, "Right")
-b3:AddCheckbox({ Name = "Freestanding", Flag = "aa_free" })
-b3:AddCheckbox({ Name = "Disable on use", Default = true, Flag = "aa_use" })
-b3:AddCheckbox({ Name = "Randomize body", Flag = "aa_body" })
-b3:AddSlider({ Name = "Body limit", Min = 0, Max = 60, Default = 58, Suffix = "°", Flag = "aa_bodylim" })
-b3:AddDropdown({ Name = "Fake mode", Items = { "Off", "Static", "Jitter", "Random" }, Flag = "aa_fake" })
-
-local LGen = Legitbot:AddSubtab("General")
-local l1 = LGen:AddGroup("Assist", Icons.mouse, "Left")
-l1:AddCheckbox({ Name = "Enabled", Flag = "lg_enabled" })
-l1:AddKeybind({ Name = "Key", Default = Enum.KeyCode.Q, Flag = "lg_key" })
-l1:AddSlider({ Name = "Strength", Min = 0, Max = 100, Default = 25, Suffix = "%", Flag = "lg_strength" })
-l1:AddSlider({ Name = "Reaction time", Min = 0, Max = 500, Default = 120, Suffix = "ms", Flag = "lg_react" })
-local l2 = LGen:AddGroup("Draw", Icons.pallet, "Right")
-l2:AddCheckbox({ Name = "Draw circle", Default = true, Flag = "lg_circle" })
-l2:AddColorPicker({ Name = "Circle color", Default = Color3.fromRGB(255, 255, 255), Flag = "lg_circle_col" })
-l2:AddSlider({ Name = "Thickness", Min = 1, Max = 5, Default = 1, Flag = "lg_thick" })
-l2:AddCheckbox({ Name = "Filled", Flag = "lg_filled" })
-
-local PGen = PlayersTab:AddSubtab("Enemies")
-PlayersTab:AddSubtab("Teammates")
-PlayersTab:AddSubtab("Local")
-local v1 = PGen:AddGroup("Boxes", Icons.user, "Left", 230)
-v1:AddCheckbox({ Name = "Box", Default = true, Flag = "pl_box" })
-v1:AddColorPicker({ Name = "Box color", Default = Color3.fromRGB(255, 255, 255), Flag = "pl_box_col" })
-v1:AddDropdown({ Name = "Box style", Items = { "Full", "Corner", "3D" }, Flag = "pl_box_style" })
-v1:AddCheckbox({ Name = "Name", Default = true, Flag = "pl_name" })
-v1:AddColorPicker({ Name = "Name color", Default = Color3.fromRGB(255, 255, 255), Flag = "pl_name_col" })
-v1:AddCheckbox({ Name = "Health bar", Flag = "pl_health" })
-v1:AddColorPicker({ Name = "Health color", Default = Color3.fromRGB(80, 255, 120), Flag = "pl_health_col" })
-local v2 = PGen:AddGroup("Extra", Icons.ghost, "Right", 230)
-v2:AddCheckbox({ Name = "Distance", Flag = "pl_dist" })
-v2:AddCheckbox({ Name = "Tracers", Flag = "pl_tracer" })
-v2:AddColorPicker({ Name = "Tracer color", Default = Color3.fromRGB(0, 180, 255), Flag = "pl_tracer_col" })
-v2:AddDropdown({ Name = "Tracer origin", Items = { "Bottom", "Center", "Top", "Mouse" }, Flag = "pl_tracer_origin" })
-v2:AddCheckbox({ Name = "Highlight", Flag = "pl_chams" })
-v2:AddColorPicker({ Name = "Fill color", Default = Color3.fromRGB(255, 60, 90), Flag = "pl_fill" })
-v2:AddColorPicker({ Name = "Outline color", Default = Color3.fromRGB(255, 255, 255), Flag = "pl_outline" })
-local v3 = PGen:AddGroup("Settings", Icons.feather, "Left", 160)
-v3:AddSlider({ Name = "Max distance", Min = 50, Max = 5000, Default = 1500, Suffix = "m", Flag = "pl_maxdist" })
-v3:AddSlider({ Name = "Text size", Min = 8, Max = 24, Default = 13, Flag = "pl_textsize" })
-v3:AddDropdown({ Name = "Font", Items = { "Museo", "Gotham", "Code", "Arcade" }, Flag = "pl_font" })
-
-local WGen = World:AddSubtab("General")
-local w1 = WGen:AddGroup("Lighting", Icons.pallet, "Left")
-w1:AddCheckbox({ Name = "Custom ambient", Flag = "w_ambient" })
-w1:AddColorPicker({ Name = "Ambient color", Default = Color3.fromRGB(120, 120, 160), Flag = "w_ambient_col" })
-w1:AddSlider({ Name = "Brightness", Min = 0, Max = 10, Default = 2, Flag = "w_bright" })
-w1:AddSlider({ Name = "Time of day", Min = 0, Max = 24, Default = 14, Suffix = "h", Flag = "w_time" })
-w1:AddCheckbox({ Name = "Remove fog", Flag = "w_fog" })
-local w2 = WGen:AddGroup("Sky", Icons.feather, "Right")
-w2:AddDropdown({ Name = "Skybox", Items = { "Default", "Night", "Sunset", "Space", "Clouds" }, Flag = "w_sky" })
-w2:AddColorPicker({ Name = "Sky tint", Default = Color3.fromRGB(255, 255, 255), Flag = "w_skytint" })
-w2:AddDropdown({ Name = "Effect style", Items = Styles, Flag = "w_style" })
-w2:AddCheckbox({ Name = "Bloom", Default = true, Flag = "w_bloom" })
-w2:AddSlider({ Name = "Bloom intensity", Min = 0, Max = 100, Default = 40, Suffix = "%", Flag = "w_bloom_int" })
-
-local MGen = MainTab:AddSubtab("General")
-local m1 = MGen:AddGroup("Movement", Icons.hammer, "Left")
-m1:AddCheckbox({ Name = "Auto jump", Flag = "m_bhop" })
-m1:AddCheckbox({ Name = "Auto sprint", Flag = "m_sprint" })
-m1:AddSlider({ Name = "Field of view", Min = 70, Max = 120, Default = 70, Suffix = "°", Flag = "m_camfov" })
-m1:AddKeybind({ Name = "Zoom key", Default = Enum.KeyCode.V, Flag = "m_zoom" })
-local m2 = MGen:AddGroup("Interface", Icons.code, "Right")
-m2:AddColorPicker({ Name = "Accent color", Default = Theme.Accent, Flag = "m_accent" })
-m2:AddDropdown({ Name = "Theme", Items = { "Dark", "Darker", "Midnight", "Ocean" }, Flag = "m_theme" })
-m2:AddCheckbox({ Name = "Watermark", Default = true, Flag = "m_watermark" })
-m2:AddCheckbox({ Name = "Keybind list", Default = true, Flag = "m_keybinds" })
-m2:AddSlider({ Name = "Menu scale", Min = 50, Max = 150, Default = 100, Suffix = "%", Flag = "m_scale" })
-m2:AddLabel("Menu key: Insert")
-
-local SGen = Scripts:AddSubtab("Configs")
-local s1 = SGen:AddGroup("Configs", Icons.save, "Left")
-s1:AddDropdown({ Name = "Config", Items = { "default", "legit", "rage", "custom" }, Flag = "cfg_sel" })
-s1:AddTextbox({ Name = "New config", Flag = "cfg_name" })
-s1:AddButton({ Name = "Create", Callback = function() print("config created") end })
-s1:AddButton({ Name = "Load", Callback = function() print("config loaded") end })
-s1:AddButton({ Name = "Delete", Callback = function() print("config deleted") end })
-local s2 = SGen:AddGroup("Lua", Icons.code, "Right")
-s2:AddCheckbox({ Name = "Allow scripts", Flag = "lua_allow" })
-s2:AddCheckbox({ Name = "Auto load", Flag = "lua_autoload" })
-s2:AddButton({ Name = "Reload scripts", Callback = function() print("scripts reloaded") end })
-
-return Library
+print("[Tey Private] GUI Loaded. Press Insert to toggle.")
