@@ -9,7 +9,7 @@
  
 -- The script works like this: finds two fuels to upgrade the generator -> go fix the closest power plant (main way to get gem)
 print("Loading")
-print("[ UPDATE ] Changed movement to Anti-Cheat bypass smooth stepping mode")
+print("[ UPDATE ] Fixed Power Box sticking issue with Anti-Stuck Timeout & Smooth Stepping")
 print("Tell me in Rscript or Scriptblox if there are any bugs")
 if not game:IsLoaded() then
     game.Loaded:Wait()
@@ -213,7 +213,7 @@ local function adaptiveCrawlTo(targetPos, humanoidRootPart, character)
     
     local startPos = humanoidRootPart.Position
     local distance = (finalTarget - startPos).Magnitude
-    local speed = 55 -- ปรับความเร็วให้เหมาะสมเพื่อลดโอกาสโดนเซิร์ฟเวอร์เตะ
+    local speed = 55 
     
     if distance < 10 then
         humanoidRootPart.CFrame = CFrame.new(finalTarget)
@@ -278,7 +278,6 @@ local function runPipeline()
     -- STEP 3: OPTIMIZED POWER BOX QUERY & TRACKING (ZIP STRAIGHT TO POWER PLANT)
     print("[Step 3] Scanning for closest Power Box model...")
     local powerBoxData = {}
-    local interactionSuccess = false
  
     if MapFolder and MapFolder:FindFirstChild("Tiles") then
         for _, child in ipairs(MapFolder.Tiles:GetChildren()) do
@@ -307,7 +306,9 @@ local function runPipeline()
         adaptiveCrawlTo(finalBoxTarget, humanoidRootPart, character)
         task.wait(0.5)
  
-        if (humanoidRootPart.Position - finalBoxTarget).Magnitude < 15 then
+        -- Anti-Stuck Timeout: พยายามค้นหาและกดปุ่มไม่เกิน 4 วินาที ถ้ากดไม่ได้จะบังคับหลุดลูปเพื่อรีเซ็ตเกมทันที
+        local startTime = tick()
+        repeat
             local prompt = chosenBox:FindFirstChildWhichIsA("ProximityPrompt", true)
             if prompt then
                 for i = 1, 3 do
@@ -321,25 +322,23 @@ local function runPipeline()
                     task.wait(0.1)
                 end
                 print("[Pipeline] Interaction successfully forced!")
-                interactionSuccess = true
+                break
             end
-        end
+            task.wait(0.2)
+        until (tick() - startTime) > 4 
     end
  
     -- --- VOTE PLAY AGAIN SEQUENCE ---
     task.wait(0.5) 
-    if interactionSuccess then
- 
-        if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
-            pcall(function()
-                PlayAgainRemote:FireServer()
-            end)
-            print("[Play Again] Sequence executed successfully.")
-        else
-            warn("[Warning] VotePlayAgain remote path could not be found.")
-        end
-        print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
+    if PlayAgainRemote and PlayAgainRemote:IsA("RemoteEvent") then
+        pcall(function()
+            PlayAgainRemote:FireServer()
+        end)
+        print("[Play Again] Sequence executed successfully.")
+    else
+        warn("[Warning] VotePlayAgain remote path could not be found.")
     end
+    print("Free and Keyless, script is in https://pastebin.com/V0wHqZe4")
 end
  
 -- [ Background Tasks ]
